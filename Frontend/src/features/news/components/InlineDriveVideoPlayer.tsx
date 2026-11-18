@@ -55,6 +55,9 @@ if (!hasNativeExpoVideo && hasNativeWebView) {
   }
 }
 
+// الحجم القياسي (Standard 16:9) لجميع كروت الفيديو في الصفحة الرئيسية لمنع أي قفزات في الارتفاع
+export const STANDARD_VIDEO_ASPECT_RATIO = 16 / 9;
+
 interface InlineDriveVideoPlayerProps {
   videoUrl: string;
   coverImageUrl?: string | null;
@@ -231,11 +234,24 @@ function NativeExoPlayerView({
     } catch {}
   };
 
+  // تكبير الفيديو لعرضه بالحجم والأبعاد الأصلية الطبيعية في الشاشة الكاملة
+  const handleEnterFullscreen = async (e?: any) => {
+    e?.stopPropagation?.();
+    mutePressTimeRef.current = Date.now();
+    try {
+      if (videoViewRef.current?.enterFullscreen) {
+        await videoViewRef.current.enterFullscreen();
+      }
+    } catch (err) {
+      console.warn('[VideoPlayer] enterFullscreen error:', err);
+    }
+  };
+
   return (
     <View
       style={[
         styles.container,
-        height ? { height } : { width: '100%', aspectRatio },
+        height ? { height } : { width: '100%', aspectRatio: STANDARD_VIDEO_ASPECT_RATIO },
       ]}>
       {/* خلفية صورة المعاينة الفورية: تمنع أي شاشة سوداء أثناء تحميل الفيديو عبر الإنترنت */}
       {effectiveCoverUrl ? (
@@ -246,13 +262,13 @@ function NativeExoPlayerView({
         />
       ) : null}
 
-      {/* مشغل الفيديو الأصلي مع pointerEvents="none" لمنع ابتلاع الضغطات في أندرويد */}
+      {/* مشغل الفيديو الأصلي مع تفعيل التكبير الكامل للشاشة */}
       <VideoView
         ref={videoViewRef}
         style={styles.nativeVideo}
         player={player}
         nativeControls={false}
-        allowsFullscreen={false}
+        allowsFullscreen={true}
         contentFit="contain"
         pointerEvents="none"
       />
@@ -278,8 +294,21 @@ function NativeExoPlayerView({
         </View>
       ) : null}
 
-      {/* زر كتم وفتح الصوت: محمي تماماً من إيقاف الفيديو وبدون أي نصوص تظهر على الشاشة */}
+      {/* شريط الأزرار السفلي: زر التكبير على اليسار وزر الصوت على اليمين */}
       <View style={styles.controlsBottomRow} pointerEvents="box-none">
+        {/* زر التكبير للشاشة الكاملة وعرض الفيديو بأبعاده الأصلية */}
+        <Pressable
+          style={styles.circleControlBtn}
+          onPressIn={() => {
+            mutePressTimeRef.current = Date.now();
+          }}
+          onPress={handleEnterFullscreen}
+          hitSlop={12}
+          accessibilityLabel="تكبير الفيديو للشاشة الكاملة">
+          <Ionicons name="expand" size={17} color="#FFFFFF" />
+        </Pressable>
+
+        {/* زر كتم وفتح الصوت */}
         <Pressable
           style={[
             styles.circleControlBtn,
@@ -426,7 +455,7 @@ export function InlineDriveVideoPlayer({
 
   const containerDimension = height
     ? { height }
-    : { width: '100%' as const, aspectRatio };
+    : { width: '100%' as const, aspectRatio: STANDARD_VIDEO_ASPECT_RATIO };
 
   useEffect(() => {
     let isMounted = true;
@@ -513,6 +542,20 @@ export function InlineDriveVideoPlayer({
               style={{ marginLeft: I18nManager.isRTL ? -2 : 3 }}
             />
           </View>
+        </View>
+
+        {/* زر التكبير في المعاينة المبدئية */}
+        <View style={styles.controlsBottomRow} pointerEvents="box-none">
+          <Pressable
+            style={styles.circleControlBtn}
+            onPress={() => {
+              setUserExplicitPlay(true);
+              setHasBeenMounted(true);
+            }}
+            hitSlop={12}
+            accessibilityLabel="تكبير الفيديو للشاشة الكاملة">
+            <Ionicons name="expand" size={17} color="#FFFFFF" />
+          </Pressable>
         </View>
       </Pressable>
     );
@@ -685,10 +728,11 @@ const styles = StyleSheet.create({
   controlsBottomRow: {
     position: 'absolute',
     bottom: 10,
+    left: 12,
     right: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     zIndex: 20,
   },
   circleControlBtn: {
