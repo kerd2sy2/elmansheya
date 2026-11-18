@@ -392,23 +392,16 @@ app.get('/status', (req, res) => {
 });
 
 /**
- * صياغة رسالة التحقق بتوقيت مصر مع هاش الأمان لمنع الحظر
+ * صياغة رسالة رمز التحقق مع هاش فريد لمنع الحظر
  */
 function buildAntiBanOtpMessage(code) {
     const formattedCode = "*`" + code + "`*";
-    const now = new Date();
-    const cairoTime = now.toLocaleTimeString('ar-EG-u-nu-latn', {
-        timeZone: 'Africa/Cairo',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-    });
-    const hashId = crypto.randomBytes(2).toString('hex').toUpperCase();
+    const hashId = `#${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 
-    return `*تطبيق المنشية*\n` +
-           `رمز التحقق: ${formattedCode}\n\n` +
-           `تطبيق خدمي مجاني بالكامل لأهالي القرية لوجه الله وبدون أي منفعة للمطور.\n` +
-           `#المنشية_خدمي_مجاني_${hashId} [توقيت مصر ${cairoTime}]`;
+    return `رمز التحقق الخاص بك هو ${formattedCode}\n` +
+           `لا تشارك هذا الكود\n\n` +
+           `التطبيق مجاني بالكامل نكتب هذا الهاش (${hashId})\n` +
+           `كي لا يتم حظر الرقم`;
 }
 
 // إرسال كود التحقق مع الفحص المسبق onWhatsApp ومحاكاة الكتابة البشرية
