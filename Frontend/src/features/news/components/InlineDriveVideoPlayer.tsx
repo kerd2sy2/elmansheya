@@ -288,7 +288,7 @@ export function InlineDriveVideoPlayer({
   isActive = false,
 }: InlineDriveVideoPlayerProps) {
   const [autoPlayAllowed, setAutoPlayAllowed] = useState<boolean>(true);
-  const [userWantsToPlay, setUserWantsToPlay] = useState<boolean>(false);
+  const [userExplicitPlay, setUserExplicitPlay] = useState<boolean>(false);
 
   const fileId = extractGoogleDriveFileId(videoUrl);
   const directStreamUrl = getDirectVideoUrl(videoUrl);
@@ -301,16 +301,12 @@ export function InlineDriveVideoPlayer({
     shouldAutoPlayVideoNow().then((canAutoPlay) => {
       if (isMounted) {
         setAutoPlayAllowed(canAutoPlay);
-        if (canAutoPlay) {
-          setUserWantsToPlay(true);
-        }
       }
     });
 
     const unsubscribe = subscribeToAutoPlaySetting((enabled) => {
       if (isMounted) {
         setAutoPlayAllowed(enabled);
-        if (!enabled) setUserWantsToPlay(false);
       }
     });
 
@@ -333,16 +329,17 @@ export function InlineDriveVideoPlayer({
     }
   };
 
-  // إدارة الذاكرة الاحترافية لمنع OutOfMemoryError نهائياً:
-  // لا نقوم بإنشاء مشغل الفيديو الأصيل في الذاكرة إلا إذا كان المنشور نشطاً في الشاشة أو أراد المستخدم تشغيله
-  // وبذلك تكون هناك نسخة مشغل واحدة فقط في الذاكرة بدلاً من ٣٠ مشغل!
-  const shouldMountPlayer = isActive || userWantsToPlay;
+  // حماية الذاكرة الصارمة (Strict Single ExoPlayer in Memory):
+  // لا نقوم بتركيب كائن ExoPlayer في ذاكرة الهاتف إلا إذا كان هذا الكارت هو النشط حصراً في منتصف الشاشة
+  // أو إذا ضغط المستخدم بإصبعه على هذا الكارت تحديداً.
+  // بمجرد أن يمرر المستخدم بعيداً (isActive=false)، يُحذف الكائن وتسترجع الذاكرة كاملة فوراً!
+  const shouldMountPlayer = (isActive && autoPlayAllowed) || userExplicitPlay;
 
   if (!shouldMountPlayer) {
     return (
       <Pressable
         style={[styles.container, containerDimension]}
-        onPress={() => setUserWantsToPlay(true)}
+        onPress={() => setUserExplicitPlay(true)}
         accessibilityLabel="تشغيل الفيديو المدمج">
         {coverImageUrl ? (
           <Image

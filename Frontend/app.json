@@ -36,6 +36,7 @@
     },
     "android": {
       "package": "com.elmansheya.almuwatin",
+      "largeHeap": true,
       "googleServicesFile": "./google-services.json",
       "versionCode": 1,
       "adaptiveIcon": {
