@@ -4,6 +4,7 @@ import React from 'react';
 import { I18nManager, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
 import { getDirectImageUrl, getDirectVideoUrl } from '@/core/utils/googleDrive';
+import { InlineDriveVideoPlayer } from './InlineDriveVideoPlayer';
 import { NewsCardItem } from '../types/news.types';
 import { parseAuthorInfo } from './SmallNewsCard';
 
@@ -63,28 +64,24 @@ export const FeaturedNewsCard = React.memo(function FeaturedNewsCard({
 
   return (
     <View style={styles.card}>
-      {directCoverUrl ? (
+      {hasVideo ? (
         <View style={styles.mediaContainer}>
+          <InlineDriveVideoPlayer
+            videoUrl={directVideoUrl!}
+            coverImageUrl={directCoverUrl}
+            height={230}
+          />
+        </View>
+      ) : directCoverUrl ? (
+        <Pressable
+          style={styles.mediaContainer}
+          onPress={() => onPress?.(item)}>
           <Image
             source={{ uri: directCoverUrl }}
             style={styles.coverImage}
             contentFit="cover"
           />
-          {hasVideo ? (
-            <View style={styles.videoPlayOverlay}>
-              <View style={styles.playButtonCircle}>
-                <Ionicons name="play" size={28} color="#FFFFFF" style={{ marginLeft: 2 }} />
-              </View>
-            </View>
-          ) : null}
-        </View>
-      ) : hasVideo ? (
-        <View style={styles.videoOnlyBox}>
-          <View style={styles.playButtonCircle}>
-            <Ionicons name="play" size={28} color="#FFFFFF" style={{ marginLeft: 2 }} />
-          </View>
-          <Text style={styles.videoOnlyLabel}>فيديو مميز مرفق مع الخبر</Text>
-        </View>
+        </Pressable>
       ) : null}
 
       <View style={styles.body}>

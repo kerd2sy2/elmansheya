@@ -3,6 +3,8 @@ import { Image } from 'expo-image';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { rtlFlexDirection } from '@/core/theme/rtl';
+import { getDirectImageUrl, getDirectVideoUrl } from '@/core/utils/googleDrive';
+import { InlineDriveVideoPlayer } from '@/features/admin/components/InlineDriveVideoPlayer';
 import { NewsCardItem } from '../types/news.types';
 
 interface SmallNewsCardProps {
@@ -10,34 +12,41 @@ interface SmallNewsCardProps {
   onPress?: (item: NewsCardItem) => void;
 }
 
-/**
- * SmallNewsCard يلتزم بالترتيب المحدد في البند 3.3 من المواصفات:
- * 1. عنوان الخبر
- * 2. فقرة مختصرة
- * 3. صورة الخبر
- * 4. زر المزيد عند وجود نص طويل
- */
 export function SmallNewsCard({ item, onPress }: SmallNewsCardProps) {
+  const directCoverUrl = getDirectImageUrl(item.cover_image_url);
+  const directVideoUrl = getDirectVideoUrl(item.video_stream_url);
+  const hasVideo = Boolean(directVideoUrl);
+
   return (
-    <Pressable style={styles.card} onPress={() => onPress?.(item)}>
-      {/* 1. عنوان الخبر */}
-      <Text style={styles.title}>{item.title}</Text>
+    <View style={styles.card}>
+      {/* 1. عنوان الخبر وفقرة مختصرة */}
+      <Pressable onPress={() => onPress?.(item)}>
+        <Text style={styles.title}>{item.title}</Text>
+        <Text style={styles.summary} numberOfLines={3}>
+          {item.summary}
+        </Text>
+      </Pressable>
 
-      {/* 2. فقرة مختصرة */}
-      <Text style={styles.summary} numberOfLines={3}>
-        {item.summary}
-      </Text>
-
-      {/* 3. صورة الخبر */}
-      {item.cover_image_url ? (
-        <Image
-          source={{ uri: item.cover_image_url }}
-          style={styles.image}
-          contentFit="cover"
-        />
+      {/* 2. وسائط الخبر: فيديو مدمج يشتغل مباشرة في الصفحة الرئيسية أو صورة الخبر */}
+      {hasVideo ? (
+        <View style={styles.mediaContainer}>
+          <InlineDriveVideoPlayer
+            videoUrl={directVideoUrl!}
+            coverImageUrl={directCoverUrl}
+            height={190}
+          />
+        </View>
+      ) : directCoverUrl ? (
+        <Pressable onPress={() => onPress?.(item)}>
+          <Image
+            source={{ uri: directCoverUrl }}
+            style={styles.image}
+            contentFit="cover"
+          />
+        </Pressable>
       ) : null}
 
-      {/* 4. زر المزيد عند وجود نص طويل */}
+      {/* 3. زر المزيد عند وجود نص طويل */}
       <View style={styles.footer}>
         <View style={styles.metaRow}>
           <Ionicons name="newspaper-outline" size={14} color="#64748B" />
@@ -50,7 +59,7 @@ export function SmallNewsCard({ item, onPress }: SmallNewsCardProps) {
           <Ionicons name="chevron-back-outline" size={14} color="#973c00" />
         </Pressable>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -61,6 +70,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    marginBottom: 14,
   },
   title: {
     fontSize: 16,
@@ -79,6 +89,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 10,
     width: '100%',
+  },
+  mediaContainer: {
+    width: '100%',
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#0F172A',
+    marginBottom: 10,
   },
   image: {
     width: '100%',

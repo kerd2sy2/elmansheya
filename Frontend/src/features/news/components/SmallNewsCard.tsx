@@ -4,6 +4,7 @@ import React from 'react';
 import { I18nManager, Pressable, StyleSheet, Text, View } from 'react-native';
 import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
 import { getDirectImageUrl, getDirectVideoUrl } from '@/core/utils/googleDrive';
+import { InlineDriveVideoPlayer } from './InlineDriveVideoPlayer';
 import { NewsCardItem } from '../types/news.types';
 
 interface SmallNewsCardProps {
@@ -149,93 +150,85 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
   );
 
   return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.card,
-        pressed && { opacity: 0.96, transform: [{ scale: 0.995 }] },
-      ]}
-      onPress={() => onPress?.(item)}>
-      {/* ١. رأس البوست الأنيق: صورة الناشر، اسمه الصافي، ودوره/قسمه تحته مباشرة */}
-      <View style={styles.header}>
-        <View style={styles.authorRow}>
-          {item.author_avatar_url ? (
-            <Image
-              source={{ uri: directAvatarUrl }}
-              style={styles.avatar}
-              contentFit="cover"
-            />
-          ) : (
-            <View style={styles.avatarFallback}>
-              <Ionicons name="person" size={18} color="#973c00" />
-            </View>
-          )}
+    <View style={styles.card}>
+      {/* الرأس والنص قابلان للضغط لفتح التفاصيل */}
+      <Pressable onPress={() => onPress?.(item)} style={styles.cardHeaderPressable}>
+        {/* ١. رأس البوست الأنيق: صورة الناشر، اسمه الصافي، ودوره/قسمه تحته مباشرة */}
+        <View style={styles.header}>
+          <View style={styles.authorRow}>
+            {item.author_avatar_url ? (
+              <Image
+                source={{ uri: directAvatarUrl }}
+                style={styles.avatar}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={styles.avatarFallback}>
+                <Ionicons name="person" size={18} color="#973c00" />
+              </View>
+            )}
 
-          <View style={styles.authorInfoCol}>
-            {/* السطر الأول: اسم الناشر فقط بدون أي أقواس أو مكان بجانبه + علامة التوثيق */}
-            <View style={styles.authorNameRow}>
-              <Text style={styles.authorName} numberOfLines={1}>
-                {cleanName}
-              </Text>
-              {item.author_is_verified ? (
-                <Ionicons name="checkmark-circle" size={15} color="#0284C7" />
-              ) : null}
-            </View>
+            <View style={styles.authorInfoCol}>
+              {/* السطر الأول: اسم الناشر فقط بدون أي أقواس أو مكان بجانبه + علامة التوثيق */}
+              <View style={styles.authorNameRow}>
+                <Text style={styles.authorName} numberOfLines={1}>
+                  {cleanName}
+                </Text>
+                {item.author_is_verified ? (
+                  <Ionicons name="checkmark-circle" size={15} color="#0284C7" />
+                ) : null}
+              </View>
 
-            {/* السطر الثاني: الدور أو القسم باللون الأسود، بدون أيقونة، وبدون بوكس/خلفية */}
-            <View style={styles.authorRoleRow}>
-              <Text style={styles.authorRoleText} numberOfLines={1}>
-                {roleTitle}
-              </Text>
-            </View>
+              {/* السطر الثاني: الدور أو القسم باللون الأسود، بدون أيقونة، وبدون بوكس/خلفية */}
+              <View style={styles.authorRoleRow}>
+                <Text style={styles.authorRoleText} numberOfLines={1}>
+                  {roleTitle}
+                </Text>
+              </View>
 
-            {/* السطر الثالث: وقت وتاريخ النشر */}
-            <View style={styles.timeDateRow}>
-              <Ionicons name="time-outline" size={11} color="#94A3B8" />
-              <Text style={styles.timeText}>{time}</Text>
-              <Text style={styles.dotSeparator}>•</Text>
-              <Text style={styles.dateText}>{date}</Text>
+              {/* السطر الثالث: وقت وتاريخ النشر */}
+              <View style={styles.timeDateRow}>
+                <Ionicons name="time-outline" size={11} color="#94A3B8" />
+                <Text style={styles.timeText}>{time}</Text>
+                <Text style={styles.dotSeparator}>•</Text>
+                <Text style={styles.dateText}>{date}</Text>
+              </View>
             </View>
           </View>
         </View>
-      </View>
 
-      {/* ٢. عنوان المنشور - محاذاة صارمة من اليمين إلى اليسار */}
-      <View style={styles.textWrap}>
-        <Text style={styles.title}>{item.title}</Text>
-      </View>
+        {/* ٢. عنوان المنشور - محاذاة صارمة من اليمين إلى اليسار */}
+        <View style={styles.textWrap}>
+          <Text style={styles.title}>{item.title}</Text>
+        </View>
 
-      {/* ٣. نص / براجراف المنشور - محاذاة صارمة من اليمين إلى اليسار */}
-      <View style={styles.textWrap}>
-        <Text style={styles.summary} numberOfLines={hasImage || hasVideo ? 3 : 5}>
-          {item.summary}
-        </Text>
-      </View>
+        {/* ٣. نص / براجراف المنشور - محاذاة صارمة من اليمين إلى اليسار */}
+        <View style={styles.textWrap}>
+          <Text style={styles.summary} numberOfLines={hasImage || hasVideo ? 3 : 5}>
+            {item.summary}
+          </Text>
+        </View>
+      </Pressable>
 
-      {/* ٤. وسائط المنشور: صورة بجودة عالية و/أو شارة الفيديو */}
-      {hasImage ? (
+      {/* ٤. وسائط المنشور: إذا كان هناك فيديو يتم تشغيله مباشرة في الشاشة الرئيسية داخل الكارت بدون فتح صفحة */}
+      {hasVideo ? (
         <View style={styles.mediaContainer}>
+          <InlineDriveVideoPlayer
+            videoUrl={directVideoUrl!}
+            coverImageUrl={directCoverUrl}
+            height={205}
+          />
+        </View>
+      ) : hasImage ? (
+        <Pressable
+          style={styles.mediaContainer}
+          onPress={() => onPress?.(item)}>
           <Image
             source={{ uri: directCoverUrl }}
             style={styles.image}
             contentFit="cover"
           />
-          {hasVideo ? (
-            <View style={styles.videoPlayOverlay}>
-              <View style={styles.playButtonCircle}>
-                <Ionicons name="play" size={24} color="#FFFFFF" style={{ marginLeft: 2 }} />
-              </View>
-            </View>
-          ) : null}
-        </View>
-      ) : hasVideo ? (
-        <View style={styles.videoOnlyCard}>
-          <View style={styles.videoOnlyBox}>
-            <View style={styles.playButtonCircle}>
-              <Ionicons name="play" size={24} color="#FFFFFF" style={{ marginLeft: 2 }} />
-            </View>
-            <Text style={styles.videoOnlyLabel}>فيديو مرفق مع المنشور</Text>
-          </View>
-        </View>
+        </Pressable>
       ) : null}
 
       {/* ٥. شريط التفاعل وتذييل البوست الحديث */}
@@ -259,7 +252,7 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
           <Text style={styles.viewsText}>{item.views_count} مشاهدة</Text>
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 });
 
@@ -277,6 +270,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 2,
+  },
+  cardHeaderPressable: {
+    width: '100%',
+    alignItems: 'stretch',
   },
   header: {
     flexDirection: rtlFlexDirection,
