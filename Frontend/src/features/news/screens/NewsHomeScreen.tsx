@@ -50,6 +50,7 @@ export function NewsHomeScreen() {
   const [selectedNews, setSelectedNews] = useState<NewsCardItem | null>(null);
   const [showSearch, setShowSearch] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [visibleCount, setVisibleCount] = useState<number>(15);
   const [showNotificationsModal, setShowNotificationsModal] =
     useState<boolean>(false);
 
@@ -321,6 +322,11 @@ export function NewsHomeScreen() {
     );
   }, [allNewsList, searchQuery]);
 
+  // حماية استهلاك الذاكرة (Memory Optimization): عرض أول 15 خبر وتفريغ الحمل عن المعالج
+  const visibleNews = useMemo(() => {
+    return displayedNews.slice(0, visibleCount);
+  }, [displayedNews, visibleCount]);
+
   return (
     <View style={styles.screenContainer}>
       {/* ١. درع شريط الإشعارات الثابت: يضمن بقاء شريط الإشعارات نظيفاً وعدم ظهور المحتوى أو تداخله فيه أبداً */}
@@ -518,13 +524,23 @@ export function NewsHomeScreen() {
           ) : null}
           {(displayedNews?.length ?? 0) > 0 ? (
             <View style={styles.smallNewsList}>
-              {displayedNews?.map((item) => (
+              {visibleNews.map((item) => (
                 <SmallNewsCard
                   key={item.id}
                   item={item}
                   onPress={setSelectedNews}
                 />
               ))}
+              {displayedNews.length > visibleCount ? (
+                <Pressable
+                  style={styles.loadMoreBtn}
+                  onPress={() => setVisibleCount((prev) => prev + 15)}>
+                  <Text style={styles.loadMoreText}>
+                    عرض المزيد من أخبار القرية ({displayedNews.length - visibleCount})
+                  </Text>
+                  <Ionicons name="chevron-down" size={16} color="#973c00" />
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
         </WidgetErrorBoundary>
@@ -644,6 +660,30 @@ const styles = StyleSheet.create({
   },
   smallNewsList: {
     gap: 12,
+  },
+  loadMoreBtn: {
+    flexDirection: rtlFlexDirection,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#FED7AA',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 16,
+    shadowColor: '#973c00',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  loadMoreText: {
+    color: '#973c00',
+    fontSize: 14,
+    fontWeight: '800',
   },
   headerRow: {
     flexDirection: rtlFlexDirection,

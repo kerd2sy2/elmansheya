@@ -122,7 +122,8 @@ export function InlineDriveVideoPlayer({
   coverImageUrl,
   height = 240,
 }: InlineDriveVideoPlayerProps) {
-  const [userWantsToPlay, setUserWantsToPlay] = useState<boolean>(!coverImageUrl);
+  // حماية الذاكرة: لا يتم تفعيل أو تحميل الفيديو في الذاكرة إلا عند ضغط المستخدم الفعلي على زر التشغيل
+  const [userWantsToPlay, setUserWantsToPlay] = useState<boolean>(false);
 
   const fileId = extractGoogleDriveFileId(videoUrl);
   const directStreamUrl = getDirectVideoUrl(videoUrl);
@@ -141,19 +142,25 @@ export function InlineDriveVideoPlayer({
     }
   };
 
-  // ١. شاشة الغلاف مع زر تشغيل عصري إذا لم يضغط المستخدم تشغيل بعد
-  if (!userWantsToPlay && coverImageUrl) {
+  // ١. شاشة الغلاف مع زر تشغيل عصري خفيف جداً على الذاكرة بدون تشغيل أي محرك فيديو قبل الضغط
+  if (!userWantsToPlay) {
     return (
       <Pressable
         style={[styles.container, { height }]}
         onPress={() => setUserWantsToPlay(true)}
         accessibilityLabel="تشغيل الفيديو المدمج">
-        <Image
-          source={{ uri: coverImageUrl }}
-          style={styles.coverImage}
-          contentFit="cover"
-          transition={200}
-        />
+        {coverImageUrl ? (
+          <Image
+            source={{ uri: coverImageUrl }}
+            style={styles.coverImage}
+            contentFit="cover"
+            transition={200}
+          />
+        ) : (
+          <View style={[styles.coverImage, styles.darkPoster]}>
+            <Ionicons name="film-outline" size={42} color="#334155" />
+          </View>
+        )}
         <View style={styles.playOverlay}>
           <View style={styles.playCircle}>
             <Ionicons
@@ -218,6 +225,11 @@ const styles = StyleSheet.create({
   coverImage: {
     width: '100%',
     height: '100%',
+  },
+  darkPoster: {
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   playOverlay: {
     ...StyleSheet.absoluteFill,
