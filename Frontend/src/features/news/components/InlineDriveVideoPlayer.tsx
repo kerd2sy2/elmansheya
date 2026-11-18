@@ -115,6 +115,11 @@ function NativeExoPlayerView({
   const player = useVideoPlayer(videoSource, (p: any) => {
     p.loop = true;
     p.muted = true;
+    if (isActive && autoPlayAllowed && !manuallyPaused) {
+      try {
+        p.play();
+      } catch {}
+    }
   });
 
   const handleTrackDimension = useCallback(
@@ -189,18 +194,22 @@ function NativeExoPlayerView({
 
   // الضغط المباشر على الفيديو للإيقاف المؤقت أو التشغيل
   const handleTogglePlayPause = () => {
-    // درع حماية حاسم: إذا كان المستخدم ضغط على زر الصوت في آخر 700ms، يمنع إيقاف الفيديو نهائياً
-    if (Date.now() - mutePressTimeRef.current < 700) {
+    // درع حماية حاسم: إذا كان المستخدم ضغط على زر الصوت في آخر 350ms، يمنع إيقاف الفيديو نهائياً
+    if (Date.now() - mutePressTimeRef.current < 350) {
       return;
     }
     if (!player) return;
-    if (player.playing) {
+
+    const isCurrentlyPlaying = Boolean(player.playing ?? isPlaying);
+    if (isCurrentlyPlaying) {
       setManuallyPaused(true);
+      setIsPlaying(false);
       try {
         player.pause();
       } catch {}
     } else {
       setManuallyPaused(false);
+      setIsPlaying(true);
       try {
         player.play();
       } catch {}
@@ -235,34 +244,37 @@ function NativeExoPlayerView({
         />
       ) : null}
 
-      {/* منطقة الفيديو القابلة للضغط للتشغيل والإيقاف المؤقت فقط */}
+      {/* مشغل الفيديو الأصلي مع pointerEvents="none" لمنع ابتلاع الضغطات في أندرويد */}
+      <VideoView
+        ref={videoViewRef}
+        style={styles.nativeVideo}
+        player={player}
+        nativeControls={false}
+        allowsFullscreen={false}
+        contentFit="contain"
+        pointerEvents="none"
+      />
+
+      {/* طبقة الضغط الشفافة فوق الفيديو بالكامل لالتقاط الضغطات دون أي اعتراض من الـ Native View */}
       <Pressable
         style={StyleSheet.absoluteFill}
         onPress={handleTogglePlayPause}
-        accessibilityLabel="تشغيل أو إيقاف الفيديو">
-        <VideoView
-          ref={videoViewRef}
-          style={styles.nativeVideo}
-          player={player}
-          nativeControls={false}
-          allowsFullscreen={false}
-          contentFit="contain"
-        />
+        accessibilityLabel="تشغيل أو إيقاف الفيديو"
+      />
 
-        {/* زر التشغيل الشفاف في المنتصف عند التوقف المؤقت */}
-        {!isPlaying ? (
-          <View style={styles.centerPlayOverlay} pointerEvents="none">
-            <View style={styles.centerPlayCircle}>
-              <Ionicons
-                name="play"
-                size={32}
-                color="#FFFFFF"
-                style={{ marginLeft: I18nManager.isRTL ? -2 : 3 }}
-              />
-            </View>
+      {/* زر التشغيل الشفاف في المنتصف عند التوقف المؤقت */}
+      {!isPlaying ? (
+        <View style={styles.centerPlayOverlay} pointerEvents="none">
+          <View style={styles.centerPlayCircle}>
+            <Ionicons
+              name="play"
+              size={32}
+              color="#FFFFFF"
+              style={{ marginLeft: I18nManager.isRTL ? -2 : 3 }}
+            />
           </View>
-        ) : null}
-      </Pressable>
+        </View>
+      ) : null}
 
       {/* زر كتم وفتح الصوت: محمي تماماً من إيقاف الفيديو وبدون أي نصوص تظهر على الشاشة */}
       <View style={styles.controlsBottomRow} pointerEvents="box-none">
@@ -365,7 +377,9 @@ export function InlineDriveVideoPlayer({
     16 / 9;
 
   const [aspectRatio, setAspectRatio] = useState<number>(resolvedInitialRatio);
-  const [hasBeenMounted, setHasBeenMounted] = useState<boolean>(false);
+  const [hasBeenMounted, setHasBeenMounted] = useState<boolean>(() =>
+    Boolean(isActive && autoPlayAllowed)
+  );
 
   // تحديث النسبة عند تغير initialAspectRatio الممررة من الكارت الأب
   useEffect(() => {

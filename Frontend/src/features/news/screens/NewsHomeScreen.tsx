@@ -151,8 +151,8 @@ export function NewsHomeScreen() {
   }).current;
 
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 60,
-    minimumViewTime: 120,
+    itemVisiblePercentThreshold: 30,
+    minimumViewTime: 0,
   }).current;
 
   // معالجة التمرير للتأثير على الهيدر
@@ -299,12 +299,12 @@ export function NewsHomeScreen() {
           onEndReachedThreshold={0.4}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
-          // تحسينات أداء الذاكرة الصارمة لحماية أندرويد من الـ OutOfMemoryError
-          removeClippedSubviews={Platform.OS === 'android'}
-          maxToRenderPerBatch={4}
-          windowSize={5}
-          initialNumToRender={4}
-          updateCellsBatchingPeriod={50}
+          // تحسينات أداء الذاكرة وسلاسة السكرول الفائقة لمنع التقطيع والتهنيج
+          removeClippedSubviews={false}
+          maxToRenderPerBatch={6}
+          windowSize={7}
+          initialNumToRender={5}
+          updateCellsBatchingPeriod={40}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

@@ -72,27 +72,36 @@ export function warmMediaAspectRatioCache(items: NewsCardItem[]) {
     initMediaAspectRatioCache();
   }
 
+  // ١. تسجيل العناصر التي تملك أبعاداً مسبقة (0ms وبدون أي استهلاك للشبكة)
   items.forEach((item) => {
     if (!item) return;
-
-    // إذا كانت نسبة الأبعاد مسجلة بالفعل
     if (item.aspect_ratio && item.aspect_ratio > 0) {
       const clamped = Math.max(0.68, Math.min(item.aspect_ratio, 2.2));
       mediaAspectRatioCache.set(item.id, clamped);
       if (item.video_stream_url) mediaAspectRatioCache.set(item.video_stream_url, clamped);
       if (item.cover_image_url) mediaAspectRatioCache.set(item.cover_image_url, clamped);
-      return;
     }
+  });
 
+  // ٢. فحص أول 4 عناصر فقط في البداية مع تدرج زمني (Staggered) لمنع اختناق الشبكة أو تهنيج الشاشة
+  const itemsToMeasure = items
+    .filter((it) => {
+      if (!it || it.aspect_ratio) return false;
+      const url =
+        getDirectImageUrl(it.cover_image_url) ||
+        getGoogleDriveThumbnailUrl(it.video_stream_url);
+      return url && !mediaAspectRatioCache.has(url) && !mediaAspectRatioCache.has(it.id);
+    })
+    .slice(0, 4);
+
+  itemsToMeasure.forEach((item, index) => {
     const effectiveCoverUrl =
       getDirectImageUrl(item.cover_image_url) ||
       getGoogleDriveThumbnailUrl(item.video_stream_url);
 
-    if (
-      effectiveCoverUrl &&
-      !mediaAspectRatioCache.has(effectiveCoverUrl) &&
-      !mediaAspectRatioCache.has(item.id)
-    ) {
+    if (!effectiveCoverUrl) return;
+
+    setTimeout(() => {
       RNImage.getSize(
         effectiveCoverUrl,
         (w, h) => {
@@ -109,6 +118,6 @@ export function warmMediaAspectRatioCache(items: NewsCardItem[]) {
         },
         () => {}
       );
-    }
+    }, index * 80);
   });
 }

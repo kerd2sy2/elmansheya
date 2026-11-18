@@ -175,29 +175,44 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
   onLayout,
 }: SmallNewsCardProps) {
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
-  const directCoverUrl =
-    getDirectImageUrl(item.cover_image_url) ||
-    getGoogleDriveThumbnailUrl(item.video_stream_url);
-  const directAvatarUrl = getDirectImageUrl(item.author_avatar_url);
-  const directVideoUrl = getDirectVideoUrl(item.video_stream_url);
+  const directCoverUrl = useMemo(
+    () =>
+      getDirectImageUrl(item.cover_image_url) ||
+      getGoogleDriveThumbnailUrl(item.video_stream_url),
+    [item.cover_image_url, item.video_stream_url]
+  );
+  const directAvatarUrl = useMemo(
+    () => getDirectImageUrl(item.author_avatar_url),
+    [item.author_avatar_url]
+  );
+  const directVideoUrl = useMemo(
+    () => getDirectVideoUrl(item.video_stream_url),
+    [item.video_stream_url]
+  );
   const hasImage = Boolean(directCoverUrl);
   const hasVideo = Boolean(directVideoUrl);
 
-  const cachedRatio =
-    item.aspect_ratio ||
-    getCachedAspectRatio([
-      item.id,
-      directCoverUrl,
-      directVideoUrl,
-      item.video_stream_url,
-      item.cover_image_url,
-    ]) ||
-    undefined;
+  const cachedRatio = useMemo(
+    () =>
+      item.aspect_ratio ||
+      getCachedAspectRatio([
+        item.id,
+        directCoverUrl,
+        directVideoUrl,
+        item.video_stream_url,
+        item.cover_image_url,
+      ]) ||
+      undefined,
+    [item.aspect_ratio, item.id, item.video_stream_url, item.cover_image_url, directCoverUrl, directVideoUrl]
+  );
 
   const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(
     cachedRatio || null
   );
-  const { time, date } = formatPublishTimeAndDate(item.published_at);
+  const { time, date } = useMemo(
+    () => formatPublishTimeAndDate(item.published_at),
+    [item.published_at]
+  );
 
   const isLongSummary =
     (item.summary?.length ?? 0) > 85 || (item.summary || '').includes('\n');
@@ -206,10 +221,14 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
     [item.summary, isLongSummary]
   );
 
-  const { cleanName, roleTitle } = parseAuthorInfo(
-    item.author_display_name,
-    item.author_badge_label,
-    item.title
+  const { cleanName, roleTitle } = useMemo(
+    () =>
+      parseAuthorInfo(
+        item.author_display_name,
+        item.author_badge_label,
+        item.title
+      ),
+    [item.author_display_name, item.author_badge_label, item.title]
   );
 
   const toggleExpand = () => {
