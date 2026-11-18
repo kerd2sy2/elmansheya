@@ -38,7 +38,7 @@ const ONBOARDING_SLIDES: OnboardingSlide[] = [
     description:
       'بوابتك الرقمية الشاملة لمتابعة الخدمات البلدية، تقديم البلاغات، والتواصل الفعال لخدمة أهالي الحي بلمسة واحدة.',
     lottieSource: require('../../../../assets/json/logo.json'),
-    lottieLoop: true,
+    lottieLoop: false,
   },
   {
     id: 'welcome_2',

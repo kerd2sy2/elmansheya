@@ -1,8 +1,11 @@
+import { Ionicons } from '@expo/vector-icons';
+import LottieView from 'lottie-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Keyboard,
-  KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -11,53 +14,81 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getSecureItem, setSecureItem } from '@/core/auth-storage/sessionStorage';
 import { getCompositeDeviceFingerprint } from '@/core/security/deviceFingerprint';
 import { APP_THEME } from '@/core/theme/colors';
+import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
+import { useSmoothKeyboardOffset } from '@/core/theme/useSmoothKeyboardOffset';
 import {
+  completeWhatsAppRegistration,
   sendWhatsAppOtp,
   verifyWhatsAppOtp,
-  completeWhatsAppRegistration,
 } from '../api/auth.api';
 import { WelcomeOnboarding } from '../components/WelcomeOnboarding';
 import { useAuth } from '../context/AuthContext';
 
 const ONBOARDING_SEEN_KEY = 'elmansheya_has_seen_onboarding_v1';
 
+interface CountryDialOption {
+  code: string;
+  nameAr: string;
+  dialCode: string;
+  placeholder: string;
+}
+
+const COUNTRY_OPTIONS: CountryDialOption[] = [
+  { code: 'EG', nameAr: 'مصر', dialCode: '+20', placeholder: '01012345678' },
+  { code: 'SA', nameAr: 'السعودية', dialCode: '+966', placeholder: '501234567' },
+  { code: 'AE', nameAr: 'الإمارات', dialCode: '+971', placeholder: '501234567' },
+  { code: 'KW', nameAr: 'الكويت', dialCode: '+965', placeholder: '51234567' },
+  { code: 'QA', nameAr: 'قطر', dialCode: '+974', placeholder: '33123456' },
+  { code: 'BH', nameAr: 'البحرين', dialCode: '+973', placeholder: '39123456' },
+  { code: 'OM', nameAr: 'عُمان', dialCode: '+968', placeholder: '91234567' },
+  { code: 'JO', nameAr: 'الأردن', dialCode: '+962', placeholder: '791234567' },
+  { code: 'LY', nameAr: 'ليبيا', dialCode: '+218', placeholder: '911234567' },
+  { code: 'SD', nameAr: 'السودان', dialCode: '+249', placeholder: '912345678' },
+];
+
 type AuthStep = 'phone' | 'otp' | 'register_details';
 
 export function LoginScreen() {
   const { loginWithDirectUser } = useAuth();
+  const keyboardOffset = useSmoothKeyboardOffset(
+    Platform.OS === 'android' ? 10 : 0
+  );
 
-  // حالة شاشات الترحيب
+  // حالة عرض جولة الترحيب لأول مرة فقط
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
 
-  // مرحلة تسجيل الدخول
+  // مراحل الصفحة المخصصة
   const [step, setStep] = useState<AuthStep>('phone');
 
-  // المفتاح وكود الدولة (الافتراضي مصر +20)
+  // كود الدولة والرقم (الافتراضي مصر +20)
   const [dialCode, setDialCode] = useState<string>('+20');
   const [phone, setPhone] = useState<string>('');
+  const [showCountryPicker, setShowCountryPicker] = useState<boolean>(false);
+
+  // رمز التحقق
   const [otpCode, setOtpCode] = useState<string>('');
   const [resendTimer, setResendTimer] = useState<number>(60);
 
-  // بيانات الحساب الجديد
+  // بيانات المواطن الجديد
   const [newFullName, setNewFullName] = useState<string>('');
-  const [newBirthYear, setNewBirthYear] = useState<string>('');
-  const [newBirthMonth, setNewBirthMonth] = useState<string>('');
   const [newBirthDay, setNewBirthDay] = useState<string>('');
+  const [newBirthMonth, setNewBirthMonth] = useState<string>('');
+  const [newBirthYear, setNewBirthYear] = useState<string>('');
   const [newArea, setNewArea] = useState<string>('المنشية');
 
-  // حالات التحميل والخطأ
+  // حالة الإرسال والأخطاء
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [errorText, setErrorText] = useState<string | null>(null);
 
-  const dialCodeInputRef = useRef<any>(null);
   const phoneInputRef = useRef<any>(null);
   const otpInputRef = useRef<any>(null);
   const nameInputRef = useRef<any>(null);
+  const monthInputRef = useRef<any>(null);
+  const yearInputRef = useRef<any>(null);
 
   useEffect(() => {
     let active = true;
@@ -71,29 +102,42 @@ export function LoginScreen() {
     };
   }, []);
 
-  // عداد إعادة الإرسال
+  // مؤقت إعادة إرسال الرمز
   useEffect(() => {
-    let timer: any = null;
-    if (step === 'otp' && resendTimer > 0) {
-      timer = setInterval(() => {
-        setResendTimer((prev) => (prev > 0 ? prev - 1 : 0));
-      }, 1000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
+    if (step !== 'otp' || resendTimer <= 0) return;
+    const timer = setInterval(() => {
+      setResendTimer((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
   }, [step, resendTimer]);
 
-  // لصق آمن من الحافظة
+  // لصق آمن من الحافظة دون التسبب في أخطاء إذا لم يكن ExpoClipboard مضمناً في العميل
   const handlePasteFromClipboard = async () => {
     try {
       let text = '';
-      try {
-        const mod = require('expo-clipboard');
-        if (mod && typeof mod.getStringAsync === 'function') {
-          text = await mod.getStringAsync();
+      if (
+        Platform.OS === 'web' &&
+        typeof navigator !== 'undefined' &&
+        navigator.clipboard?.readText
+      ) {
+        text = await navigator.clipboard.readText();
+      } else {
+        try {
+          const { requireOptionalNativeModule } = require('expo-modules-core');
+          const nativeClipboard =
+            typeof requireOptionalNativeModule === 'function'
+              ? requireOptionalNativeModule('ExpoClipboard')
+              : null;
+          if (nativeClipboard) {
+            const mod = require('expo-clipboard');
+            if (mod && typeof mod.getStringAsync === 'function') {
+              text = await mod.getStringAsync();
+            }
+          }
+        } catch {
+          // الوحدة غير متوفرة في بيئة التشغيل الحالية
         }
-      } catch {}
+      }
 
       if (!text) return;
       const digits = text.replace(/[^0-9]/g, '');
@@ -103,7 +147,9 @@ export function LoginScreen() {
         setErrorText(null);
         handleVerifyOtp(code);
       }
-    } catch {}
+    } catch {
+      // تجاهل أخطاء الحافظة بصمت
+    }
   };
 
   useEffect(() => {
@@ -112,7 +158,6 @@ export function LoginScreen() {
     }
   }, [step]);
 
-  // حساب الرقم الدولي الموحد للإرسال
   const getFullInternationalPhone = (): string => {
     let cleanCode = dialCode.replace(/[^0-9]/g, '');
     if (!cleanCode) cleanCode = '20';
@@ -130,13 +175,8 @@ export function LoginScreen() {
   };
 
   const handleDialCodeChange = (text: string) => {
-    let clean = text.trim();
-    if (!clean.startsWith('+')) {
-      clean = '+' + clean.replace(/[^0-9]/g, '');
-    } else {
-      clean = '+' + clean.substring(1).replace(/[^0-9]/g, '');
-    }
-    setDialCode(clean);
+    const digitsOnly = text.replace(/[^0-9]/g, '');
+    setDialCode(digitsOnly ? `+${digitsOnly}` : '+');
     setErrorText(null);
   };
 
@@ -151,43 +191,52 @@ export function LoginScreen() {
     setErrorText(null);
   };
 
-  // ١. إرسال كود الواتساب
+  const activeCountryPlaceholder =
+    COUNTRY_OPTIONS.find((c) => c.dialCode === dialCode)?.placeholder ||
+    '01012345678';
+
   const handleSendWhatsAppOtp = async () => {
     Keyboard.dismiss();
     setErrorText(null);
 
-    const fullPhone = getFullInternationalPhone();
+    const cleanCode = dialCode.replace(/[^0-9]/g, '');
+    if (!cleanCode) {
+      setErrorText('يرجى إدخال مفتاح الدولة بشكل صحيح.');
+      return;
+    }
+
     if (!phone.trim() || phone.trim().length < 7) {
       setErrorText('يرجى إدخال رقم هاتف صحيح للمتابعة.');
       return;
     }
 
+    const fullPhone = getFullInternationalPhone();
     setSubmitting(true);
     try {
       const fp = await getCompositeDeviceFingerprint();
       const res = await sendWhatsAppOtp(fullPhone, fp);
 
       if (!res.ok) {
-        setErrorText(res.error || 'تعذر إرسال كود الواتساب، يرجى مراجعة الرقم.');
+        setErrorText(res.error || 'تعذر إرسال رمز التحقق، يرجى مراجعة الرقم.');
         setSubmitting(false);
         return;
       }
 
+      setOtpCode('');
       setResendTimer(60);
       setStep('otp');
-      setTimeout(() => otpInputRef.current?.focus(), 300);
+      setTimeout(() => otpInputRef.current?.focus(), 250);
     } catch {
-      setErrorText('تعذر الاتصال بالخادم. تأكد من اتصال الإنترنت.');
+      setErrorText('تعذر الاتصال بالخادم، يرجى التأكد من اتصال الإنترنت.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ٢. التحقق من كود الواتساب
   const handleVerifyOtp = async (codeToVerify?: string) => {
     const code = (codeToVerify ?? otpCode).trim();
     if (!code || code.length < 4) {
-      setErrorText('يرجى كتابة رمز التحقق المكون من 4 أرقام.');
+      setErrorText('يرجى إدخال رمز التحقق المكون من 4 أرقام.');
       return;
     }
 
@@ -201,49 +250,45 @@ export function LoginScreen() {
       const res = await verifyWhatsAppOtp(fullPhone, code, fp);
 
       if (!res.ok) {
-        setErrorText(res.error || 'كود التحقق غير صحيح، يرجى المحاولة ثانية.');
+        setErrorText(res.error || 'رمز التحقق غير صحيح، يرجى المحاولة مرة أخرى.');
         setSubmitting(false);
         return;
       }
 
-      // إذا كان مسجلاً من قبل -> دخول فوري إلى الرئيسية
       if (res.is_registered && res.data?.user) {
         await loginWithDirectUser(res.data.user, res.data.refresh_token);
         setSubmitting(false);
         return;
       }
 
-      // إذا كان مستخدماً جديداً -> الانتقال لملء الاسم وتاريخ الميلاد
       setStep('register_details');
-      setTimeout(() => nameInputRef.current?.focus(), 300);
+      setTimeout(() => nameInputRef.current?.focus(), 250);
     } catch {
-      setErrorText('حدث خطأ أثناء فحص الكود، يرجى المحاولة لاحقاً.');
+      setErrorText('حدث خطأ أثناء التحقق من الرمز، يرجى المحاولة لاحقاً.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ٣. إكمال تسجيل حساب جديد
   const handleCompleteRegistration = async () => {
     Keyboard.dismiss();
     setErrorText(null);
 
     const name = newFullName.trim();
-    if (!name || name.split(' ').length < 2) {
-      setErrorText('يرجى كتابة الاسم الثنائي أو الثلاثي بالكامل.');
+    if (!name || name.split(/\s+/).length < 2) {
+      setErrorText('يرجى إدخال الاسم الثنائي أو الثلاثي بالكامل.');
       return;
     }
 
-    const day = newBirthDay.trim().padStart(2, '0');
-    const month = newBirthMonth.trim().padStart(2, '0');
-    const year = newBirthYear.trim();
-
-    if (!year || year.length !== 4 || parseInt(year, 10) < 1920 || parseInt(year, 10) > 2020) {
-      setErrorText('يرجى كتابة سنة ميلاد صحيحة (مثال: 1995).');
+    const yearNum = parseInt(newBirthYear.trim(), 10);
+    if (!newBirthYear.trim() || newBirthYear.trim().length !== 4 || isNaN(yearNum) || yearNum < 1920 || yearNum > 2020) {
+      setErrorText('يرجى إدخال سنة ميلاد صحيحة من 4 أرقام (مثال: 1995).');
       return;
     }
 
-    const birthDate = `${year}-${month || '01'}-${day || '01'}`;
+    const day = (newBirthDay.trim() || '01').padStart(2, '0');
+    const month = (newBirthMonth.trim() || '01').padStart(2, '0');
+    const birthDate = `${newBirthYear.trim()}-${month}-${day}`;
 
     setSubmitting(true);
     try {
@@ -267,12 +312,11 @@ export function LoginScreen() {
       await loginWithDirectUser(res.data.user, res.data.refresh_token);
       setSubmitting(false);
     } catch {
-      setErrorText('تعذر حفظ البيانات بالخادم.');
+      setErrorText('تعذر حفظ البيانات بالخادم، يرجى المحاولة لاحقاً.');
       setSubmitting(false);
     }
   };
 
-  // إذا كانت أول مرة للمستخدم -> عرض جولة الترحيب
   if (hasSeenOnboarding === false) {
     return (
       <WelcomeOnboarding
@@ -286,418 +330,444 @@ export function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <Animated.View
+        style={[styles.keyboardView, { paddingBottom: keyboardOffset }]}>
         <ScrollView
-          contentContainerStyle={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* شريط علوي أنيق بلون التيراكوتا الفاتح */}
-          <View style={styles.topBar}>
+          showsVerticalScrollIndicator={false}>
+          {/* رأس الهوية الرسمي: اللوجو بجانب كلمة المنشية بدون خلفية أو إطار، يعمل مرة واحدة ويثبت على أوضح لون */}
+          <View style={styles.brandHeader}>
+            <View style={styles.brandRow}>
+              <LottieView
+                source={require('../../../../assets/json/logo.json')}
+                autoPlay
+                loop={false}
+                style={styles.logoLottie}
+              />
+              <Text style={styles.brandTitle}>المنشية</Text>
+            </View>
+            <Text style={styles.brandSubtitle}>
+              البوابة الرقمية الموحدة لأهالي قرية المنشية
+            </Text>
+          </View>
+
+          {/* البطاقة البيضاء الأساسية المتناسقة مع ثيم التطبيق */}
+          <View style={styles.card}>
+            {/* زر رجوع أنيق في الخطوات الفرعية */}
             {step !== 'phone' ? (
               <Pressable
-                style={styles.backButton}
+                style={styles.backRow}
                 onPress={() => {
                   if (step === 'otp') setStep('phone');
                   if (step === 'register_details') setStep('otp');
                   setErrorText(null);
                 }}
-                hitSlop={12}
-              >
-                <Ionicons name="arrow-forward" size={20} color={APP_THEME.primary} />
-                <Text style={styles.backButtonText}>رجوع</Text>
+                hitSlop={10}>
+                <Ionicons name="arrow-forward" size={18} color={APP_THEME.primary} />
+                <Text style={styles.backText}>تغيير الرقم</Text>
               </Pressable>
-            ) : (
-              <View style={styles.headerPill}>
-                <Ionicons name="shield-checkmark" size={14} color={APP_THEME.primary} />
-                <Text style={styles.headerPillText}>بوابة الدخول الرسمية</Text>
+            ) : null}
+
+            {/* رسالة الخطأ المنسقة */}
+            {errorText ? (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={18} color="#DC2626" />
+                <Text style={styles.errorText}>{errorText}</Text>
               </View>
-            )}
+            ) : null}
 
-            <Pressable
-              onPress={() => setHasSeenOnboarding(false)}
-              style={styles.tourLink}
-              hitSlop={8}
-            >
-              <Ionicons name="sparkles-outline" size={16} color={APP_THEME.primary} />
-              <Text style={styles.tourLinkText}>جولة التطبيق</Text>
-            </Pressable>
-          </View>
+            {/* =====================================================
+                الخطوة 1: إدخال رقم الهاتف (LTR مع مفتاح قابل للكتابة أو الاختيار)
+                ===================================================== */}
+            {step === 'phone' ? (
+              <View style={styles.stepBody}>
+                <Text style={styles.cardTitle}>تسجيل الدخول</Text>
+                <Text style={styles.cardSubtitle}>
+                  أدخل رقم هاتفك لاستلام رمز التحقق عبر واتساب والدخول مباشرة
+                </Text>
 
-          {/* تنبيه الخطأ */}
-          {Boolean(errorText) && (
-            <View style={styles.errorBanner}>
-              <Ionicons name="alert-circle" size={18} color="#DC2626" />
-              <Text style={styles.errorText}>{errorText}</Text>
-            </View>
-          )}
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>رقم الهاتف</Text>
 
-          {/* ===================================================
-              المرحلة الأولى: صفحة إدخال رقم الهاتف المخصصة (White Mode)
-             =================================================== */}
-          {step === 'phone' && (
-            <View style={styles.pageCard}>
-              {/* شارة اللوجو التيراكوتا */}
-              <View style={styles.logoBadge}>
-                <Ionicons name="phone-portrait" size={36} color={APP_THEME.primary} />
-              </View>
+                  {/* شريط موحد باتجاه LTR: المفتاح على اليسار ثم الفاصل ثم الرقم */}
+                  <View style={styles.ltrPhoneBar}>
+                    <View style={styles.dialKeyGroup}>
+                      <Pressable
+                        onPress={() => setShowCountryPicker(true)}
+                        style={styles.dropdownTrigger}
+                        hitSlop={8}>
+                        <Ionicons name="chevron-down" size={15} color="#64748B" />
+                      </Pressable>
+                      <TextInput
+                        style={styles.dialCodeInput}
+                        value={dialCode}
+                        onChangeText={handleDialCodeChange}
+                        keyboardType="phone-pad"
+                        maxLength={5}
+                        selectionColor={APP_THEME.primary}
+                      />
+                    </View>
 
-              <Text style={styles.titleText}>تسجيل الدخول برقم الهاتف</Text>
-              <Text style={styles.descText}>
-                أدخل رقم هاتفك ليصلك كود التحقق السري فوراً على الواتساب وبدون أي رسوم.
-              </Text>
+                    <View style={styles.verticalDivider} />
 
-              {/* بطاقة إدخال المفتاح والرقم */}
-              <View style={styles.inputCard}>
-                {/* كود الدولة / المفتاح */}
-                <View style={styles.dialCodeCol}>
-                  <Text style={styles.inputSubLabel}>المفتاح</Text>
-                  <TextInput
-                    ref={dialCodeInputRef}
-                    style={styles.dialCodeInput}
-                    value={dialCode}
-                    onChangeText={handleDialCodeChange}
-                    keyboardType="phone-pad"
-                    maxLength={5}
-                    textAlign="center"
-                  />
+                    <TextInput
+                      ref={phoneInputRef}
+                      style={styles.ltrPhoneInput}
+                      value={phone}
+                      onChangeText={handlePhoneChange}
+                      placeholder={activeCountryPlaceholder}
+                      placeholderTextColor="#94A3B8"
+                      keyboardType="phone-pad"
+                      maxLength={15}
+                      selectionColor={APP_THEME.primary}
+                      returnKeyType="done"
+                      onSubmitEditing={handleSendWhatsAppOtp}
+                    />
+                  </View>
                 </View>
 
-                {/* رقم الهاتف */}
-                <View style={styles.phoneCol}>
-                  <Text style={styles.inputSubLabel}>رقم الهاتف</Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    (!phone.trim() || submitting) && styles.primaryBtnDisabled,
+                    pressed && styles.primaryBtnPressed,
+                  ]}
+                  onPress={handleSendWhatsAppOtp}
+                  disabled={!phone.trim() || submitting}>
+                  {submitting ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="logo-whatsapp" size={19} color="#FFFFFF" />
+                      <Text style={styles.primaryBtnText}>إرسال رمز التحقق</Text>
+                    </>
+                  )}
+                </Pressable>
+
+                <View style={styles.securityNote}>
+                  <Ionicons name="shield-checkmark-outline" size={15} color="#64748B" />
+                  <Text style={styles.securityNoteText}>
+                    خدمة مجانية بالكامل ومؤمنة لأهالي القرية
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
+            {/* =====================================================
+                الخطوة 2: شاشة رمز التحقق (4 خانات مستقلة LTR + لصق سريع)
+                ===================================================== */}
+            {step === 'otp' ? (
+              <View style={styles.stepBody}>
+                <Text style={styles.cardTitle}>تأكيد رمز التحقق</Text>
+                <Text style={styles.cardSubtitle}>
+                  أدخل الرمز المكون من 4 أرقام المرسل إلى الواتساب على الرقم
+                </Text>
+
+                <View style={styles.targetPhonePill}>
+                  <Ionicons name="logo-whatsapp" size={16} color="#16A34A" />
+                  <Text style={styles.targetPhoneText}>
+                    {getFullInternationalPhone()}
+                  </Text>
+                </View>
+
+                {/* 4 خانات منفصلة باتجاه LTR متفاعل مع الإدخال */}
+                <Pressable
+                  style={styles.otpCellsWrapper}
+                  onPress={() => otpInputRef.current?.focus()}>
+                  <View style={styles.otpCellsRow}>
+                    {[0, 1, 2, 3].map((idx) => {
+                      const digit = otpCode[idx] || '';
+                      const isFocusedCell =
+                        otpCode.length === idx ||
+                        (idx === 3 && otpCode.length === 4);
+                      const isFilled = Boolean(digit);
+
+                      return (
+                        <View
+                          key={idx}
+                          style={[
+                            styles.otpCell,
+                            isFilled && styles.otpCellFilled,
+                            isFocusedCell && styles.otpCellActive,
+                          ]}>
+                          <Text style={styles.otpCellText}>{digit}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+
                   <TextInput
-                    ref={phoneInputRef}
-                    style={styles.phoneInput}
-                    value={phone}
-                    onChangeText={handlePhoneChange}
-                    placeholder={dialCode === '+20' ? '01012345678' : '501234567'}
+                    ref={otpInputRef}
+                    style={styles.hiddenOtpInput}
+                    value={otpCode}
+                    onChangeText={(val) => {
+                      const clean = val.replace(/[^0-9]/g, '').slice(0, 4);
+                      setOtpCode(clean);
+                      setErrorText(null);
+                      if (clean.length === 4) {
+                        handleVerifyOtp(clean);
+                      }
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={4}
+                    autoFocus
+                    caretHidden
+                  />
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.pasteBtn,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  onPress={handlePasteFromClipboard}
+                  hitSlop={8}>
+                  <Ionicons
+                    name="clipboard-outline"
+                    size={16}
+                    color={APP_THEME.primary}
+                  />
+                  <Text style={styles.pasteBtnText}>لصق الرمز</Text>
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    (otpCode.length < 4 || submitting) && styles.primaryBtnDisabled,
+                    pressed && styles.primaryBtnPressed,
+                  ]}
+                  onPress={() => handleVerifyOtp()}
+                  disabled={otpCode.length < 4 || submitting}>
+                  {submitting ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>تأكيد المتابعة</Text>
+                  )}
+                </Pressable>
+
+                <View style={styles.resendWrap}>
+                  {resendTimer > 0 ? (
+                    <Text style={styles.resendTimerText}>
+                      يمكنك إعادة إرسال الرمز خلال {resendTimer} ثانية
+                    </Text>
+                  ) : (
+                    <Pressable onPress={handleSendWhatsAppOtp} hitSlop={8}>
+                      <Text style={styles.resendActionText}>
+                        إعادة إرسال الرمز
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+            ) : null}
+
+            {/* =====================================================
+                الخطوة 3: إكمال بيانات المواطن الجديد
+                ===================================================== */}
+            {step === 'register_details' ? (
+              <View style={styles.stepBody}>
+                <Text style={styles.cardTitle}>إكمال بيانات الحساب</Text>
+                <Text style={styles.cardSubtitle}>
+                  تم توثيق رقم هاتفك بنجاح، يرجى إدخال اسمك وتاريخ ميلادك للمتابعة
+                </Text>
+
+                <View style={styles.verifiedBadge}>
+                  <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+                  <Text style={styles.verifiedBadgeText}>
+                    {getFullInternationalPhone()}
+                  </Text>
+                </View>
+
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>الاسم بالكامل</Text>
+                  <TextInput
+                    ref={nameInputRef}
+                    style={styles.textInput}
+                    placeholder="الاسم الثنائي أو الثلاثي"
                     placeholderTextColor="#94A3B8"
-                    keyboardType="phone-pad"
-                    maxLength={15}
-                    textAlign="right"
-                    returnKeyType="done"
-                    onSubmitEditing={handleSendWhatsAppOtp}
+                    value={newFullName}
+                    onChangeText={(t) => {
+                      setNewFullName(t);
+                      setErrorText(null);
+                    }}
+                    selectionColor={APP_THEME.primary}
                   />
                 </View>
-              </View>
 
-              {/* أزرار سريعة لاختيار المفتاح الشائع */}
-              <View style={styles.quickCountriesRow}>
-                {[
-                  { label: '🇪🇬 مصر (+20)', code: '+20' },
-                  { label: '🇸🇦 السعودية (+966)', code: '+966' },
-                  { label: '🇦🇪 الإمارات (+971)', code: '+971' },
-                  { label: '🇰🇼 الكويت (+965)', code: '+965' },
-                ].map((item) => (
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>تاريخ الميلاد</Text>
+                  <View style={styles.dateRow}>
+                    <View style={styles.dateCol}>
+                      <Text style={styles.dateLabel}>السنة</Text>
+                      <TextInput
+                        ref={yearInputRef}
+                        style={styles.dateInput}
+                        placeholder="1995"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="number-pad"
+                        maxLength={4}
+                        value={newBirthYear}
+                        onChangeText={(t) => {
+                          setNewBirthYear(t.replace(/[^0-9]/g, ''));
+                          setErrorText(null);
+                        }}
+                        selectionColor={APP_THEME.primary}
+                      />
+                    </View>
+
+                    <View style={styles.dateCol}>
+                      <Text style={styles.dateLabel}>الشهر</Text>
+                      <TextInput
+                        ref={monthInputRef}
+                        style={styles.dateInput}
+                        placeholder="05"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="number-pad"
+                        maxLength={2}
+                        value={newBirthMonth}
+                        onChangeText={(t) => {
+                          const clean = t.replace(/[^0-9]/g, '');
+                          setNewBirthMonth(clean);
+                          setErrorText(null);
+                          if (clean.length === 2) yearInputRef.current?.focus();
+                        }}
+                        selectionColor={APP_THEME.primary}
+                      />
+                    </View>
+
+                    <View style={styles.dateCol}>
+                      <Text style={styles.dateLabel}>اليوم</Text>
+                      <TextInput
+                        style={styles.dateInput}
+                        placeholder="12"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="number-pad"
+                        maxLength={2}
+                        value={newBirthDay}
+                        onChangeText={(t) => {
+                          const clean = t.replace(/[^0-9]/g, '');
+                          setNewBirthDay(clean);
+                          setErrorText(null);
+                          if (clean.length === 2) monthInputRef.current?.focus();
+                        }}
+                        selectionColor={APP_THEME.primary}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>المنطقة أو الشارع (اختياري)</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="المنشية"
+                    placeholderTextColor="#94A3B8"
+                    value={newArea}
+                    onChangeText={setNewArea}
+                    selectionColor={APP_THEME.primary}
+                  />
+                </View>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    (!newFullName.trim() || !newBirthYear.trim() || submitting) &&
+                      styles.primaryBtnDisabled,
+                    pressed && styles.primaryBtnPressed,
+                  ]}
+                  onPress={handleCompleteRegistration}
+                  disabled={!newFullName.trim() || !newBirthYear.trim() || submitting}>
+                  {submitting ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>إتمام التسجيل والدخول</Text>
+                  )}
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        </ScrollView>
+      </Animated.View>
+
+      {/* =====================================================
+          قائمة اختيار الدولة ومفتاح الاتصال (بدون أي إيموجي)
+          ===================================================== */}
+      <Modal
+        visible={showCountryPicker}
+        transparent
+        statusBarTranslucent
+        animationType="slide"
+        onRequestClose={() => setShowCountryPicker(false)}>
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setShowCountryPicker(false)}>
+          <Pressable
+            style={styles.countrySheet}
+            onPress={(e) => e.stopPropagation()}>
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>اختر مفتاح الدولة</Text>
+              <Pressable
+                onPress={() => setShowCountryPicker(false)}
+                style={styles.sheetCloseBtn}
+                hitSlop={10}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              style={styles.countryScroll}
+              showsVerticalScrollIndicator={false}>
+              {COUNTRY_OPTIONS.map((item) => {
+                const isSelected = dialCode === item.dialCode;
+                return (
                   <Pressable
                     key={item.code}
                     style={[
-                      styles.countryChip,
-                      dialCode === item.code && styles.countryChipActive,
+                      styles.countryOptionRow,
+                      isSelected && styles.countryOptionRowActive,
                     ]}
                     onPress={() => {
-                      setDialCode(item.code);
+                      setDialCode(item.dialCode);
+                      setShowCountryPicker(false);
                       setErrorText(null);
-                    }}
-                  >
+                      setTimeout(() => phoneInputRef.current?.focus(), 150);
+                    }}>
                     <Text
                       style={[
-                        styles.countryChipText,
-                        dialCode === item.code && styles.countryChipTextActive,
-                      ]}
-                    >
-                      {item.label}
+                        styles.countryOptionName,
+                        isSelected && styles.countryOptionNameActive,
+                      ]}>
+                      {item.nameAr}
                     </Text>
-                  </Pressable>
-                ))}
-              </View>
 
-              {/* شركات المحمول المصرية لو المفتاح +20 */}
-              {dialCode === '+20' && (
-                <View style={styles.carrierChipsRow}>
-                  {[
-                    { label: 'فودافون (010)', prefix: '010' },
-                    { label: 'اتصالات (011)', prefix: '011' },
-                    { label: 'أورانج (012)', prefix: '012' },
-                    { label: 'وي (015)', prefix: '015' },
-                  ].map((c) => (
-                    <Pressable
-                      key={c.prefix}
-                      style={[
-                        styles.carrierChip,
-                        phone.startsWith(c.prefix) && styles.carrierChipActive,
-                      ]}
-                      onPress={() => {
-                        if (!phone || phone.length <= 3) setPhone(c.prefix);
-                      }}
-                    >
+                    <View style={styles.countryOptionRight}>
                       <Text
                         style={[
-                          styles.carrierChipText,
-                          phone.startsWith(c.prefix) && styles.carrierChipTextActive,
-                        ]}
-                      >
-                        {c.label}
+                          styles.countryOptionDial,
+                          isSelected && styles.countryOptionDialActive,
+                        ]}>
+                        {item.dialCode}
                       </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
-
-              {/* زر الإرسال المعتمد بهوية المنشية التيراكوتا والواتساب */}
-              <Pressable
-                style={[
-                  styles.primaryButton,
-                  (!phone.trim() || submitting) && styles.buttonDisabled,
-                ]}
-                onPress={handleSendWhatsAppOtp}
-                disabled={!phone.trim() || submitting}
-              >
-                {submitting ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Ionicons name="logo-whatsapp" size={20} color="#FFFFFF" />
-                    <Text style={styles.primaryButtonText}>
-                      إرسال كود الدخول عبر واتساب 💬
-                    </Text>
-                  </>
-                )}
-              </Pressable>
-
-              <View style={styles.privacyNote}>
-                <Ionicons name="lock-closed" size={14} color="#64748B" />
-                <Text style={styles.privacyNoteText}>
-                  خدمة مجانية بالكامل لأهالي المنشية لحماية خصوصية بياناتك
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* ===================================================
-              المرحلة الثانية: صفحة كود التحقق 4 أرقام المخصصة (White Mode)
-             =================================================== */}
-          {step === 'otp' && (
-            <View style={styles.pageCard}>
-              <View style={styles.logoBadge}>
-                <Ionicons name="chatbubbles" size={36} color={APP_THEME.primary} />
-              </View>
-
-              <Text style={styles.titleText}>أدخل رمز التحقق</Text>
-              <Text style={styles.descText}>
-                تم إرسال كود سري مكون من 4 أرقام إلى واتساب الرقم:{'\n'}
-                <Text style={styles.phoneBadgeText}>
-                  {getFullInternationalPhone()}
-                </Text>
-              </Text>
-
-              {/* حقل إدخال الـ 4 أرقام */}
-              <View style={styles.otpBoxWrapper}>
-                <TextInput
-                  ref={otpInputRef}
-                  style={styles.otpInputBox}
-                  value={otpCode}
-                  onChangeText={(val) => {
-                    const clean = val.replace(/[^0-9]/g, '');
-                    setOtpCode(clean);
-                    setErrorText(null);
-                    if (clean.length === 4) {
-                      handleVerifyOtp(clean);
-                    }
-                  }}
-                  keyboardType="number-pad"
-                  maxLength={4}
-                  placeholder="••••"
-                  placeholderTextColor="#CBD5E1"
-                  textAlign="center"
-                  autoFocus
-                />
-
-                {/* زر سريع للصق الكود من الحافظة */}
-                <Pressable
-                  style={styles.pasteActionBtn}
-                  onPress={handlePasteFromClipboard}
-                  hitSlop={8}
-                >
-                  <Ionicons name="clipboard-outline" size={16} color={APP_THEME.primary} />
-                  <Text style={styles.pasteActionBtnText}>
-                    لصق الكود المنسوخ من واتساب 📋
-                  </Text>
-                </Pressable>
-              </View>
-
-              {/* زر تأكيد الكود */}
-              <Pressable
-                style={[
-                  styles.primaryButton,
-                  (otpCode.length < 4 || submitting) && styles.buttonDisabled,
-                ]}
-                onPress={() => handleVerifyOtp()}
-                disabled={otpCode.length < 4 || submitting}
-              >
-                {submitting ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                    <Text style={styles.primaryButtonText}>تأكيد ومتابعة ✅</Text>
-                  </>
-                )}
-              </Pressable>
-
-              {/* خيارات إعادة الإرسال وتعديل الرقم */}
-              <View style={styles.otpFooterRow}>
-                {resendTimer > 0 ? (
-                  <Text style={styles.timerNotice}>
-                    إعادة الإرسال بعد {resendTimer} ثانية
-                  </Text>
-                ) : (
-                  <Pressable onPress={handleSendWhatsAppOtp}>
-                    <Text style={styles.resendActiveText}>
-                      إعادة إرسال الكود مجدداً 💬
-                    </Text>
+                      {isSelected ? (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={18}
+                          color={APP_THEME.primary}
+                        />
+                      ) : (
+                        <View style={{ width: 18 }} />
+                      )}
+                    </View>
                   </Pressable>
-                )}
-
-                <Pressable
-                  onPress={() => {
-                    setStep('phone');
-                    setOtpCode('');
-                    setErrorText(null);
-                  }}
-                >
-                  <Text style={styles.editPhoneLink}>تعديل رقم الهاتف ✏️</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-
-          {/* ===================================================
-              المرحلة الثالثة: صفحة بيانات المواطن الجديد (White Mode)
-             =================================================== */}
-          {step === 'register_details' && (
-            <View style={styles.pageCard}>
-              <View style={styles.logoBadge}>
-                <Ionicons name="person-add" size={36} color={APP_THEME.primary} />
-              </View>
-
-              <Text style={styles.titleText}>أهلاً بك في عائلة المنشية! 🎉</Text>
-              <Text style={styles.descText}>
-                تم توثيق هاتفك بنجاح. يرجى إدخال اسمك وتاريخ ميلادك لإتمام الحساب والدخول للرئيسية مباشرة.
-              </Text>
-
-              {/* شارة الرقم الموثق */}
-              <View style={styles.phoneVerifiedBadge}>
-                <Ionicons name="shield-checkmark" size={18} color="#047857" />
-                <Text style={styles.phoneVerifiedBadgeText}>
-                  الرقم الموثق: {getFullInternationalPhone()}
-                </Text>
-              </View>
-
-              {/* الاسم بالكامل */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>الاسم بالكامل (ثنائي أو ثلاثي) *</Text>
-                <TextInput
-                  ref={nameInputRef}
-                  style={styles.formInput}
-                  placeholder="مثال: أحمد محمد عبد الله"
-                  placeholderTextColor="#94A3B8"
-                  value={newFullName}
-                  onChangeText={setNewFullName}
-                  textAlign="right"
-                />
-              </View>
-
-              {/* تاريخ الميلاد */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>تاريخ الميلاد *</Text>
-                <View style={styles.dateRow}>
-                  <View style={styles.dateCol}>
-                    <Text style={styles.dateHint}>السنة</Text>
-                    <TextInput
-                      style={styles.dateField}
-                      placeholder="1995"
-                      placeholderTextColor="#94A3B8"
-                      keyboardType="number-pad"
-                      maxLength={4}
-                      value={newBirthYear}
-                      onChangeText={setNewBirthYear}
-                      textAlign="center"
-                    />
-                  </View>
-
-                  <View style={styles.dateCol}>
-                    <Text style={styles.dateHint}>الشهر</Text>
-                    <TextInput
-                      style={styles.dateField}
-                      placeholder="05"
-                      placeholderTextColor="#94A3B8"
-                      keyboardType="number-pad"
-                      maxLength={2}
-                      value={newBirthMonth}
-                      onChangeText={setNewBirthMonth}
-                      textAlign="center"
-                    />
-                  </View>
-
-                  <View style={styles.dateCol}>
-                    <Text style={styles.dateHint}>اليوم</Text>
-                    <TextInput
-                      style={styles.dateField}
-                      placeholder="12"
-                      placeholderTextColor="#94A3B8"
-                      keyboardType="number-pad"
-                      maxLength={2}
-                      value={newBirthDay}
-                      onChangeText={setNewBirthDay}
-                      textAlign="center"
-                    />
-                  </View>
-                </View>
-              </View>
-
-              {/* المنطقة داخل القرية */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>المنطقة / الشارع (اختياري)</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="مثال: بحري البلد / وسط البلد"
-                  placeholderTextColor="#94A3B8"
-                  value={newArea}
-                  onChangeText={setNewArea}
-                  textAlign="right"
-                />
-              </View>
-
-              {/* زر الإتمام والدخول */}
-              <Pressable
-                style={[
-                  styles.primaryButton,
-                  (!newFullName.trim() || !newBirthYear.trim() || submitting) &&
-                    styles.buttonDisabled,
-                ]}
-                onPress={handleCompleteRegistration}
-                disabled={!newFullName.trim() || !newBirthYear.trim() || submitting}
-              >
-                {submitting ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Ionicons name="rocket" size={20} color="#FFFFFF" />
-                    <Text style={styles.primaryButtonText}>
-                      إتمام الدخول إلى الرئيسية 🚀
-                    </Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
-          )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -705,372 +775,341 @@ export function LoginScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FAF5EE', // ثيم المنشية الدافئ الوايت مود
+    backgroundColor: '#FAF5EE',
   },
   keyboardView: {
     flex: 1,
   },
-  scrollContainer: {
+  scrollContent: {
     flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 36,
+    paddingVertical: 28,
+  },
+  brandHeader: {
     alignItems: 'center',
+    marginBottom: 22,
   },
-  topBar: {
-    flexDirection: 'row',
+  brandRow: {
+    flexDirection: rtlFlexDirection,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 20,
-    paddingHorizontal: 4,
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 6,
   },
-  headerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: APP_THEME.primaryLight,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: APP_THEME.primaryBorder,
+  logoLottie: {
+    width: 48,
+    height: 48,
   },
-  headerPillText: {
-    color: APP_THEME.primary,
-    fontSize: 12,
-    fontWeight: '700',
+  brandTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#0F172A',
+    textAlign: 'center',
   },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 12,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  backButtonText: {
-    color: APP_THEME.primary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  tourLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  tourLinkText: {
-    color: APP_THEME.primary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  errorBanner: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    borderRadius: 14,
-    padding: 12,
-    width: '100%',
-    marginBottom: 16,
-    gap: 10,
-  },
-  errorText: {
-    color: '#B91C1C',
-    fontSize: 13,
-    flex: 1,
-    textAlign: 'right',
+  brandSubtitle: {
+    fontSize: 13.5,
     fontWeight: '600',
+    color: '#64748B',
+    textAlign: 'center',
   },
-  pageCard: {
+  card: {
     width: '100%',
-    maxWidth: 440,
+    maxWidth: 420,
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    alignItems: 'center',
     shadowColor: '#0F172A',
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 20,
     elevation: 4,
   },
-  logoBadge: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: APP_THEME.primaryLight,
+  backRow: {
+    flexDirection: rtlFlexDirection,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    borderWidth: 1.5,
-    borderColor: APP_THEME.primaryBorder,
+    alignSelf: 'flex-end',
+    gap: 6,
+    marginBottom: 12,
+    paddingVertical: 4,
   },
-  titleText: {
-    color: '#0F172A',
-    fontSize: 22,
+  backText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: APP_THEME.primary,
+  },
+  errorBox: {
+    flexDirection: rtlFlexDirection,
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#DC2626',
+    textAlign: rtlTextAlign,
+  },
+  stepBody: {
+    width: '100%',
+  },
+  cardTitle: {
+    fontSize: 20,
     fontWeight: '800',
+    color: '#0F172A',
     textAlign: 'center',
+    marginBottom: 6,
+  },
+  cardSubtitle: {
+    fontSize: 13.5,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 22,
+  },
+  fieldBlock: {
+    width: '100%',
+    marginBottom: 18,
+  },
+  fieldLabel: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#334155',
+    textAlign: rtlTextAlign,
     marginBottom: 8,
   },
-  descText: {
-    color: '#475569',
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-    paddingHorizontal: 8,
-  },
-  phoneBadgeText: {
-    color: APP_THEME.primary,
-    fontWeight: '800',
-    fontSize: 16,
-  },
-  inputCard: {
+  ltrPhoneBar: {
+    direction: 'ltr',
     flexDirection: 'row',
-    width: '100%',
+    alignItems: 'center',
+    height: 54,
     backgroundColor: '#F8FAFC',
-    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
-    overflow: 'hidden',
-    marginBottom: 16,
+    borderRadius: 14,
+    paddingHorizontal: 12,
   },
-  dialCodeCol: {
-    width: 90,
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    borderRightWidth: 1.5,
-    borderRightColor: '#CBD5E1',
+  dialKeyGroup: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
   },
-  phoneCol: {
-    flex: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+  dropdownTrigger: {
+    padding: 4,
     justifyContent: 'center',
-  },
-  inputSubLabel: {
-    color: '#64748B',
-    fontSize: 11,
-    fontWeight: '700',
-    marginBottom: 2,
-    textAlign: 'center',
+    alignItems: 'center',
   },
   dialCodeInput: {
-    color: APP_THEME.primary,
-    fontSize: 18,
+    minWidth: 46,
+    fontSize: 16,
     fontWeight: '800',
-    padding: 0,
-    textAlign: 'center',
-  },
-  phoneInput: {
-    color: '#0F172A',
-    fontSize: 18,
-    fontWeight: '700',
+    color: APP_THEME.primary,
+    textAlign: 'left',
+    writingDirection: 'ltr',
     paddingVertical: 4,
-    letterSpacing: 1,
+    paddingHorizontal: 2,
   },
-  quickCountriesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-    width: '100%',
-    marginBottom: 16,
+  verticalDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#CBD5E1',
+    marginHorizontal: 10,
   },
-  countryChip: {
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  countryChipActive: {
-    backgroundColor: APP_THEME.primaryLight,
-    borderColor: APP_THEME.primary,
-  },
-  countryChipText: {
-    color: '#475569',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  countryChipTextActive: {
-    color: APP_THEME.primary,
-    fontWeight: '800',
-  },
-  carrierChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-    width: '100%',
-    marginBottom: 24,
-  },
-  carrierChip: {
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  carrierChipActive: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#10B981',
-  },
-  carrierChipText: {
-    color: '#64748B',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  carrierChipTextActive: {
-    color: '#047857',
+  ltrPhoneInput: {
+    flex: 1,
+    fontSize: 17,
     fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: 1,
+    textAlign: 'left',
+    writingDirection: 'ltr',
+    paddingVertical: 0,
   },
-  primaryButton: {
-    flexDirection: 'row',
-    backgroundColor: APP_THEME.primary,
+  primaryBtn: {
     width: '100%',
-    paddingVertical: 15,
+    height: 52,
+    backgroundColor: APP_THEME.primary,
     borderRadius: 14,
+    flexDirection: rtlFlexDirection,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     shadowColor: APP_THEME.primary,
-    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 3,
-    marginTop: 6,
+    marginTop: 4,
   },
-  buttonDisabled: {
+  primaryBtnDisabled: {
     backgroundColor: '#CBD5E1',
     shadowOpacity: 0,
     elevation: 0,
   },
-  primaryButtonText: {
-    color: '#FFFFFF',
+  primaryBtnPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
+  },
+  primaryBtnText: {
     fontSize: 16,
     fontWeight: '800',
+    color: '#FFFFFF',
   },
-  privacyNote: {
-    flexDirection: 'row',
+  securityNote: {
+    flexDirection: rtlFlexDirection,
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    marginTop: 20,
+    marginTop: 18,
   },
-  privacyNoteText: {
-    color: '#64748B',
+  securityNoteText: {
     fontSize: 12,
     fontWeight: '500',
+    color: '#64748B',
   },
-  otpBoxWrapper: {
-    width: '100%',
-    alignItems: 'center',
-    marginVertical: 18,
-  },
-  otpInputBox: {
-    width: 240,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 2,
-    borderColor: APP_THEME.primary,
-    borderRadius: 18,
-    color: '#0F172A',
-    fontSize: 34,
-    fontWeight: '900',
-    letterSpacing: 18,
-    paddingVertical: 12,
-    textAlign: 'center',
-  },
-  pasteActionBtn: {
+  targetPhonePill: {
+    direction: 'ltr',
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'center',
+    gap: 6,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginBottom: 22,
+    marginTop: -10,
+  },
+  targetPhoneText: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#166534',
+    letterSpacing: 0.5,
+  },
+  otpCellsWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    marginBottom: 16,
+  },
+  otpCellsRow: {
+    direction: 'ltr',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  otpCell: {
+    width: 58,
+    height: 64,
+    borderRadius: 14,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpCellFilled: {
+    backgroundColor: '#FFFFFF',
+    borderColor: APP_THEME.primary,
+  },
+  otpCellActive: {
+    backgroundColor: APP_THEME.primaryLight,
+    borderColor: APP_THEME.primary,
+    borderWidth: 2,
+  },
+  otpCellText: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  hiddenOtpInput: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    opacity: 0.015,
+    fontSize: 24,
+  },
+  pasteBtn: {
+    flexDirection: rtlFlexDirection,
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 6,
     backgroundColor: APP_THEME.primaryLight,
     borderWidth: 1,
     borderColor: APP_THEME.primaryBorder,
     borderRadius: 999,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    gap: 6,
-    marginTop: 16,
-  },
-  pasteActionBtnText: {
-    color: APP_THEME.primary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  otpFooterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginTop: 20,
-    paddingHorizontal: 4,
-  },
-  timerNotice: {
-    color: '#64748B',
-    fontSize: 13,
-  },
-  resendActiveText: {
-    color: APP_THEME.primary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  editPhoneLink: {
-    color: '#0284C7',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  phoneVerifiedBadge: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    gap: 8,
     marginBottom: 20,
   },
-  phoneVerifiedBadgeText: {
-    color: '#047857',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  formGroup: {
-    width: '100%',
-    marginBottom: 16,
-  },
-  formLabel: {
-    color: '#334155',
+  pasteBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    marginBottom: 8,
-    textAlign: 'right',
+    color: APP_THEME.primary,
   },
-  formInput: {
-    backgroundColor: '#F8FAFC',
+  resendWrap: {
+    marginTop: 18,
+    alignItems: 'center',
+  },
+  resendTimerText: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  resendActionText: {
+    fontSize: 14,
+    color: APP_THEME.primary,
+    fontWeight: '800',
+  },
+  verifiedBadge: {
+    direction: 'ltr',
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 6,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
     borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginBottom: 18,
+    marginTop: -8,
+  },
+  verifiedBadgeText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  textInput: {
+    height: 50,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
-    color: '#0F172A',
-    fontSize: 15,
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 11,
+    fontSize: 15,
+    color: '#0F172A',
+    textAlign: rtlTextAlign,
   },
   dateRow: {
+    direction: 'ltr',
     flexDirection: 'row',
     gap: 10,
     width: '100%',
@@ -1078,21 +1117,104 @@ const styles = StyleSheet.create({
   dateCol: {
     flex: 1,
   },
-  dateHint: {
+  dateLabel: {
+    fontSize: 11.5,
+    fontWeight: '600',
     color: '#64748B',
-    fontSize: 11,
-    marginBottom: 4,
     textAlign: 'center',
+    marginBottom: 4,
   },
-  dateField: {
+  dateInput: {
+    height: 48,
     backgroundColor: '#F8FAFC',
-    borderRadius: 12,
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
-    color: '#0F172A',
+    borderRadius: 12,
     fontSize: 16,
     fontWeight: '700',
-    paddingVertical: 11,
+    color: '#0F172A',
     textAlign: 'center',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  countrySheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'android' ? 24 : 36,
+    maxHeight: '65%',
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  sheetHeader: {
+    flexDirection: rtlFlexDirection,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countryScroll: {
+    width: '100%',
+  },
+  countryOptionRow: {
+    flexDirection: rtlFlexDirection,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderRadius: 12,
+    marginBottom: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  countryOptionRowActive: {
+    backgroundColor: APP_THEME.primaryLight,
+    borderColor: APP_THEME.primaryBorder,
+  },
+  countryOptionName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  countryOptionNameActive: {
+    color: APP_THEME.primary,
+  },
+  countryOptionRight: {
+    direction: 'ltr',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  countryOptionDial: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  countryOptionDialActive: {
+    color: APP_THEME.primary,
   },
 });
