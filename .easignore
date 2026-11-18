@@ -1,0 +1,50 @@
+# Version control
+.git/
+
+# Other repo folders unrelated to Frontend EAS build
+Backend/
+Frontend - Admin/
+scripts/
+
+# Node & Expo
+node_modules/
+Frontend/node_modules/
+Frontend/.expo/
+Frontend/dist/
+Frontend/web-build/
+Frontend/.npm/
+Frontend/expo-env.d.ts
+Frontend/.kotlin/
+Frontend/.metro-health-check*
+Frontend/npm-debug.*
+Frontend/yarn-debug.*
+Frontend/yarn-error.*
+Frontend/*.tsbuildinfo
+Frontend/ios/
+Frontend/android/
+Frontend/example/
+
+# Sensitive deployment scripts and Admin SDK credentials (NEVER upload)
+deploy_*.py
+setup_*.py
+*firebase-adminsdk*.json
+firebase-service-account.json
+*.bat
+*.mp4
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+.env*.local
+
+# Agent and OS
+.agent/
+.gemini/
+.DS_Store
+Thumbs.db
+*.log
+
+# Explicitly keep Frontend/google-services.json for FCM native Android build
+!Frontend/google-services.json
