@@ -7,7 +7,6 @@ import {
   LayoutChangeEvent,
   Platform,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   UIManager,
@@ -178,17 +177,6 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
     setIsExpanded((prev) => !prev);
   };
 
-  const handleShare = async () => {
-    try {
-      await Share.share({
-        title: item.title,
-        message: `${item.title}\n\n${item.summary}\n\nمن تطبيق المنشية الذكي`,
-      });
-    } catch {
-      // تجاهل الإلغاء
-    }
-  };
-
   return (
     <View style={styles.card} onLayout={onLayout}>
       {/* ١. رأس البوست الأنيق: صورة الناشر، اسمه الصافي، ودوره/قسمه تحته مباشرة */}
@@ -296,18 +284,8 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
         </View>
       ) : null}
 
-      {/* ٥. شريط التفاعل وتذييل البوست الحديث: مشاركة وعدد المشاهدات */}
+      {/* ٥. شريط تذييل البوست: عدد المشاهدات */}
       <View style={styles.footer}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.shareButton,
-            pressed && { opacity: 0.8 },
-          ]}
-          onPress={handleShare}>
-          <Ionicons name="share-social-outline" size={15} color="#973c00" />
-          <Text style={styles.shareButtonText}>مشاركة الخبر</Text>
-        </Pressable>
-
         <View style={styles.viewsWrap}>
           <Ionicons name="eye-outline" size={14} color="#64748B" />
           <Text style={styles.viewsText}>{item.views_count} مشاهدة</Text>
@@ -468,28 +446,12 @@ const styles = StyleSheet.create({
   },
   footer: {
     flexDirection: rtlFlexDirection,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
-    paddingTop: 12,
+    paddingTop: 10,
     width: '100%',
-  },
-  shareButton: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  shareButtonText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#973c00',
   },
   viewsWrap: {
     flexDirection: rtlFlexDirection,

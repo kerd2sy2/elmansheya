@@ -37,9 +37,8 @@ function SkeletonCard({
         <Animated.View style={[styles.mediaBox, { opacity: pulseAnim }]} />
       ) : null}
 
-      {/* شريط التذييل: زر المشاركة والمشاهدات */}
+      {/* شريط التذييل: عدد المشاهدات */}
       <View style={styles.footerRow}>
-        <Animated.View style={[styles.bar, styles.shareBtnBar, { opacity: pulseAnim }]} />
         <Animated.View style={[styles.bar, styles.viewsBar, { opacity: pulseAnim }]} />
       </View>
     </View>
@@ -156,16 +155,11 @@ const styles = StyleSheet.create({
   },
   footerRow: {
     flexDirection: rtlFlexDirection,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#F8FAFC',
-  },
-  shareBtnBar: {
-    width: 95,
-    height: 28,
-    borderRadius: 14,
   },
   viewsBar: {
     width: 65,
