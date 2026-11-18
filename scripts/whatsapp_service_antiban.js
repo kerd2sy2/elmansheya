@@ -70,46 +70,28 @@ app.get('/status', (req, res) => {
 });
 
 /**
- * مولد الرسائل الذكي المضاد للحظر (Anti-Ban Dynamic Message Engine)
- * يضمن أن كل رسالة تخرج من السيرفر بنص فريد 100% لا يتكرر أبداً
+ * صياغة رسالة التحقق بتوقيت مصر مع هاش الأمان لمنع الحظر
  */
 function buildAntiBanOtpMessage(code) {
-    const greetings = [
-        "🏛️ *تطبيق المنشية - كود الدخول*",
-        "🏛️ *منصة أهالي المنشية*",
-        "🏛️ *مرحباً بك في تطبيق المنشية*",
-        "🏛️ *تأكيد الدخول - تطبيق المنشية*",
-        "🏛️ *رمز التحقق - مجتمع المنشية*"
-    ];
-
-    const intros = [
-        "كود التحقق الخاص بك هو:",
-        "رمز الدخول المباشر لحسابك:",
-        "كود الأمان المؤقت لتسجيل الدخول:",
-        "رمز الدخول السريع هو:",
-        "إليك رمز التحقق المطلوب:"
-    ];
-
-    const copyHints = [
-        "(انقر مطولاً أو اضغط على الرقم لنسخه 👆)",
-        "(اضغط على الكود بالأسفل لنسخه فوراً 👆)",
-        "(يمكنك نسخ الرقم مباشرة بالنقر عليه 👆)",
-        "(انقر على الرمز لنسخه بنقرة واحدة 👆)"
-    ];
-
-    const randGreeting = greetings[Math.floor(Math.random() * greetings.length)];
-    const randIntro = intros[Math.floor(Math.random() * intros.length)];
-    const randHint = copyHints[Math.floor(Math.random() * copyHints.length)];
-
-    // كود مونو-سبيس قابل للنسخ بنقرة واحدة داخل علامات `
+    // كود مونو-سبيس عريض يسهل نسخه
     const formattedCode = "*`" + code + "`*";
 
-    // توليد معرف فريد ووقت دقيق لمنع تطابق الرسائل نهائياً في خوارزميات ميتا
-    const refId = crypto.randomBytes(3).toString('hex').toUpperCase();
+    // توقيت جمهورية مصر العربية (Africa/Cairo)
     const now = new Date();
-    const timeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const cairoTime = now.toLocaleTimeString('ar-EG-u-nu-latn', {
+        timeZone: 'Africa/Cairo',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    });
 
-    return `${randGreeting}\n\n${randIntro}\n\n${formattedCode}\n\n${randHint}\n⏱️ صالح لمدة 5 دقائق\n\n🔒 مرجع: #${refId} - ${timeStr}`;
+    // بصمة هاش عشوائية فريدة لكل رسالة لمنع تطابق الرسائل وخوارزميات الحظر
+    const hashId = crypto.randomBytes(2).toString('hex').toUpperCase();
+
+    return `*تطبيق المنشية*\n` +
+           `رمز التحقق: ${formattedCode}\n\n` +
+           `تطبيق خدمي مجاني بالكامل لأهالي القرية لوجه الله وبدون أي منفعة للمطور.\n` +
+           `#المنشية_خدمي_مجاني_${hashId} [توقيت مصر ${cairoTime}]`;
 }
 
 // إرسال كود التحقق مع محاكاة الكتابة البشرية (Typing Simulation)
