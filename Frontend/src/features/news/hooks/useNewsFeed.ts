@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import { getOfflineData } from '@/core/offline/offlineStorage';
 import { getHomeNewsFeed } from '../api/news.api';
 import { NewsFeedPayload } from '../types/news.types';
+
+const NEWS_FEED_CACHE_KEY = 'mod:news:/news/feed';
 
 export function useNewsFeed() {
   const [feed, setFeed] = useState<NewsFeedPayload | null>(null);
@@ -14,7 +17,7 @@ export function useNewsFeed() {
   const loadFeed = useCallback(async (isRefresh = false, showSpinner = true) => {
     if (isRefresh && showSpinner) {
       setRefreshing(true);
-    } else if (!isRefresh) {
+    } else if (!isRefresh && !feed) {
       setLoading(true);
     }
 
@@ -32,11 +35,32 @@ export function useNewsFeed() {
     setLoading(false);
     setRefreshing(false);
     return res;
-  }, []);
+  }, [feed]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    // ١. استرجاع فوري من كاش قرص الهاتف في أجزاء من الثانية (0ms)
+    // لعرض الـ 30 خبر المحفوظة مسبقاً فور فتح التطبيق بدون أي انتظار
+    getOfflineData<NewsFeedPayload>(NEWS_FEED_CACHE_KEY)
+      .then((envelope) => {
+        if (isMounted && envelope?.data) {
+          setFeed(envelope.data);
+          setLoading(false);
+          setServedFromCache(true);
+          if (envelope.etag) setEtag(envelope.etag);
+        }
+      })
+      .catch(() => {});
+
+    // ٢. فحص ذكي مشروط مع السيرفر عبر ETag (304 Not Modified)
+    // لن يتم تحميل أي داتا إلا في حال قام المشرف بنشر خبر جديد أو تعديل بوست
     loadFeed(false, false);
-  }, [loadFeed]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return {
     feed,

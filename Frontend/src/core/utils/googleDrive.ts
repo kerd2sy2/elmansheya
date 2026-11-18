@@ -45,8 +45,8 @@ export function getDirectImageUrl(rawUrl: string | null | undefined): string {
   if (!rawUrl || isLegacyOrStaleLocalUrl(rawUrl)) return '';
   const fileId = extractGoogleDriveFileId(rawUrl);
   if (fileId) {
-    // رابط Google User Content المباشر والسريع للصور بدقة مناسبة للهواتف
-    return `https://lh3.googleusercontent.com/d/${fileId}=w1200`;
+    // رابط Google User Content المباشر والسريع للصور بدقة متوازنة تحافظ على جودة العرض وتمنع استنزاف ذاكرة الهاتف (OOM)
+    return `https://lh3.googleusercontent.com/d/${fileId}=w720`;
   }
   return rawUrl;
 }
@@ -84,7 +84,7 @@ export function getGoogleDriveThumbnailUrl(rawUrl: string | null | undefined): s
   if (!rawUrl) return '';
   const fileId = extractGoogleDriveFileId(rawUrl);
   if (fileId) {
-    return `https://lh3.googleusercontent.com/d/${fileId}=w1000`;
+    return `https://lh3.googleusercontent.com/d/${fileId}=w600`;
   }
   return '';
 }

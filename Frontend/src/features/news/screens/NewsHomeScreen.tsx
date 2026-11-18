@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Platform,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   Vibration,
@@ -15,7 +16,6 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import LottieView from 'lottie-react-native';
 
-import { API_BASE_URL } from '@/core/config/api.config';
 import { WidgetErrorBoundary } from '@/core/error-boundary/WidgetErrorBoundary';
 import { rtlFlexDirection } from '@/core/theme/rtl';
 import {
@@ -29,9 +29,9 @@ import { VillageNotificationItem } from '@/features/notifications/types/notifica
 
 import { BASE_HEADER_HEIGHT, NewsHomeHeader } from '../components/NewsHomeHeader';
 import { NewNewsUpdateBanner } from '../components/NewNewsUpdateBanner';
+import { NewsFeedSkeleton } from '../components/NewsFeedSkeleton';
 import { SmallNewsCard } from '../components/SmallNewsCard';
 import { useCollapsibleHeader } from '../hooks/useCollapsibleHeader';
-import { useFeedAutoPlay } from '../hooks/useFeedAutoPlay';
 import { useNewsFeed } from '../hooks/useNewsFeed';
 import { NewsCardItem } from '../types/news.types';
 
@@ -49,8 +49,9 @@ export function NewsHomeScreen() {
   const [visibleCount, setVisibleCount] = useState<number>(INITIAL_PAGE_SIZE);
   const [showNotificationsModal, setShowNotificationsModal] = useState<boolean>(false);
   const [hasNewNewsUpdate, setHasNewNewsUpdate] = useState<boolean>(false);
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
 
-  const scrollViewRef = useRef<React.ElementRef<typeof ScrollView>>(null);
+  const flatListRef = useRef<FlatList<NewsCardItem>>(null);
   const lottieRef = useRef<LottieView>(null);
   const newestNewsIdRef = useRef<string | null>(null);
   const lastLogoPressFetchRef = useRef<number>(0);
@@ -67,7 +68,7 @@ export function NewsHomeScreen() {
       } else if (section === 'services') {
         router.push('/services');
       } else if (section === 'news') {
-        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
       }
     },
     [router]
@@ -126,10 +127,6 @@ export function NewsHomeScreen() {
     return displayedNews.slice(0, visibleCount);
   }, [displayedNews, visibleCount]);
 
-  // هوك إدارة الفيديو الذكي أثناء التمرير
-  const { activeVideoId, updateActiveVideo, onListLayout, onCardLayout } =
-    useFeedAutoPlay(visibleNews);
-
   // هوك إدارة الهيدر التفاعلي مع السكرول
   const headerHeight = showSearch ? BASE_HEADER_HEIGHT + 68 : BASE_HEADER_HEIGHT;
   const {
@@ -141,23 +138,26 @@ export function NewsHomeScreen() {
   } = useCollapsibleHeader({
     headerHeight,
     onScrollToTopRequest: () => {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     },
   });
 
-  // معالجة التمرير وتحديث الفيديو والتحميل اللانهائي
+  // كشف ذكي للفيديو النشط على الشاشة مع تفريغ الذاكرة تلقائياً (Native Viewability)
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: any[] }) => {
+    const visibleVideoItem = viewableItems.find(
+      (vt) => Boolean(vt.isViewable && vt.item?.video_stream_url)
+    );
+    setActiveVideoId(visibleVideoItem ? visibleVideoItem.item.id : null);
+  }).current;
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 60,
+    minimumViewTime: 120,
+  }).current;
+
+  // معالجة التمرير للتأثير على الهيدر
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const currentY = contentOffset.y;
-
-    handleScrollHeader(currentY);
-    updateActiveVideo(currentY, layoutMeasurement.height);
-
-    const isCloseToBottom =
-      layoutMeasurement.height + currentY >= contentSize.height - 400;
-    if (isCloseToBottom && displayedNews.length > visibleCount) {
-      setVisibleCount((prev) => Math.min(prev + INITIAL_PAGE_SIZE, displayedNews.length));
-    }
+    handleScrollHeader(event.nativeEvent.contentOffset.y);
   };
 
   // تفاعل الضغط على لوجو المنشية في الهيدر
@@ -172,7 +172,7 @@ export function NewsHomeScreen() {
 
     lottieRef.current?.reset();
     lottieRef.current?.play();
-    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     showHeader();
     setShowSearch(false);
     setSearchQuery('');
@@ -209,31 +209,21 @@ export function NewsHomeScreen() {
     await refresh(true);
   };
 
-  // فحص خفيف على فترات متباعدة لتنبيه المستخدم بوجود جديد دون إغراق السيرفر
-  useEffect(() => {
-    const timer = setInterval(async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/news/feed`);
-        if (res.ok) {
-          const json = await res.json();
-          const items = [
-            ...(json?.data?.pinned_featured ?? []),
-            ...(json?.data?.small_news ?? []),
-          ];
-          if (items.length > 0 && newestNewsIdRef.current) {
-            const firstId = items[0]?.id;
-            if (firstId && firstId !== newestNewsIdRef.current) {
-              setHasNewNewsUpdate(true);
-            }
-          }
-        }
-      } catch {
-        // صامت لتفادي أي إزعاج
-      }
-    }, 45000);
+  const handleLoadMore = () => {
+    if (displayedNews.length > visibleCount) {
+      setVisibleCount((prev) => Math.min(prev + INITIAL_PAGE_SIZE, displayedNews.length));
+    }
+  };
 
-    return () => clearInterval(timer);
-  }, []);
+  const renderNewsItem = useCallback(
+    ({ item }: { item: NewsCardItem }) => (
+      <SmallNewsCard
+        item={item}
+        isActive={activeVideoId === item.id}
+      />
+    ),
+    [activeVideoId]
+  );
 
   return (
     <View style={styles.screenContainer}>
@@ -270,105 +260,117 @@ export function NewsHomeScreen() {
         onPress={handleLogoPress}
       />
 
-      <ScrollView
-        ref={scrollViewRef}
-        contentContainerStyle={[
-          styles.scrollContent,
-          {
-            paddingTop:
-              topInset +
-              (showSearch ? BASE_HEADER_HEIGHT + 74 : BASE_HEADER_HEIGHT) +
-              10,
-            paddingBottom: bottomTabPadding,
-          },
-        ]}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}
-        nestedScrollEnabled={true}
-        keyboardShouldPersistTaps="handled"
-        canCancelContentTouches={true}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handlePullToRefresh}
-            progressViewOffset={topInset + BASE_HEADER_HEIGHT}
-            colors={['#973c00']}
-            tintColor="#973c00"
-          />
-        }>
-        {isOffline ? (
-          <View style={styles.offlineNoticeWrap}>
-            <Ionicons name="cloud-offline-outline" size={15} color="#92400E" />
-            <Text style={styles.offlineNoticeText}>
-              أنت في وضع عدم الاتصال • يتم عرض آخر الأخبار المحفوظة على هاتفك
-            </Text>
-          </View>
-        ) : null}
-
-        {loading && !feed ? (
-          <ActivityIndicator size="large" color="#0284C7" />
-        ) : null}
-
-        {!loading && allNewsList.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Ionicons name="newspaper-outline" size={38} color="#94A3B8" />
-            <Text style={styles.emptyTitle}>مفيش أخبار منشورة لحد دلوقتي</Text>
-            <Text style={styles.emptyDesc}>
-              سيتم نشر أحدث أخبار وفعاليات قرية المنشية هنا فور اعتمادها من إدارة التطبيق.
-            </Text>
-          </View>
-        ) : null}
-
-        <WidgetErrorBoundary widgetNameAr="قائمة الأخبار">
-          {displayedNews.length > 0 ? (
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeader}>
-                {searchQuery ? 'نتائج البحث' : 'آخر أخبار القرية'}
-              </Text>
-            </View>
-          ) : searchQuery ? (
-            <View style={styles.emptyBox}>
-              <Ionicons name="search-outline" size={32} color="#94A3B8" />
-              <Text style={styles.emptyTitle}>لا توجد نتائج مطابقة</Text>
-              <Text style={styles.emptyDesc}>
-                لم يتم العثور على أخبار تحتوي على &quot;{searchQuery}&quot;
-              </Text>
-            </View>
-          ) : null}
-
-          {displayedNews.length > 0 ? (
-            <View style={styles.smallNewsList} onLayout={onListLayout}>
-              {visibleNews.map((item) => (
-                <SmallNewsCard
-                  key={item.id}
-                  item={item}
-                  isActive={activeVideoId === item.id}
-                  onLayout={(e) => onCardLayout(item.id, e)}
-                />
-              ))}
-
-              {displayedNews.length > visibleCount ? (
-                <View style={styles.infiniteLoadingBox}>
-                  <ActivityIndicator size="small" color="#973c00" />
-                  <Text style={styles.infiniteLoadingText}>
-                    جاري تحميل أخبار القرية التالية تلقائياً...
+      {/* شاشة التحميل الهيكلي (Skeleton) - تظهر فقط عند عدم وجود أي داتا في كاش الهاتف أثناء الجلب الأولي */}
+      {loading && !feed ? (
+        <View
+          style={[
+            styles.scrollContent,
+            {
+              paddingTop:
+                topInset +
+                (showSearch ? BASE_HEADER_HEIGHT + 74 : BASE_HEADER_HEIGHT) +
+                10,
+              paddingBottom: bottomTabPadding,
+            },
+          ]}>
+          <NewsFeedSkeleton />
+        </View>
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          data={visibleNews}
+          keyExtractor={(item) => item.id}
+          renderItem={renderNewsItem}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingTop:
+                topInset +
+                (showSearch ? BASE_HEADER_HEIGHT + 74 : BASE_HEADER_HEIGHT) +
+                10,
+              paddingBottom: bottomTabPadding,
+            },
+          ]}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.4}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          // تحسينات أداء الذاكرة الصارمة لحماية أندرويد من الـ OutOfMemoryError
+          removeClippedSubviews={Platform.OS === 'android'}
+          maxToRenderPerBatch={4}
+          windowSize={5}
+          initialNumToRender={4}
+          updateCellsBatchingPeriod={50}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handlePullToRefresh}
+              progressViewOffset={topInset + BASE_HEADER_HEIGHT}
+              colors={['#973c00']}
+              tintColor="#973c00"
+            />
+          }
+          ListHeaderComponent={
+            <>
+              {isOffline ? (
+                <View style={styles.offlineNoticeWrap}>
+                  <Ionicons name="cloud-offline-outline" size={15} color="#92400E" />
+                  <Text style={styles.offlineNoticeText}>
+                    أنت في وضع عدم الاتصال • يتم عرض آخر الأخبار المحفوظة على هاتفك
                   </Text>
                 </View>
               ) : null}
-            </View>
-          ) : null}
-        </WidgetErrorBoundary>
-      </ScrollView>
 
-      {/* نافذة الإشعارات الموحدة */}
+              {displayedNews.length > 0 ? (
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionHeader}>
+                    {searchQuery ? 'نتائج البحث' : 'آخر أخبار القرية'}
+                  </Text>
+                </View>
+              ) : null}
+            </>
+          }
+          ListEmptyComponent={
+            !loading && allNewsList.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <Ionicons name="newspaper-outline" size={38} color="#94A3B8" />
+                <Text style={styles.emptyTitle}>مفيش أخبار منشورة لحد دلوقتي</Text>
+                <Text style={styles.emptyDesc}>
+                  سيتم نشر أحدث أخبار وفعاليات قرية المنشية هنا فور اعتمادها من إدارة التطبيق.
+                </Text>
+              </View>
+            ) : searchQuery && displayedNews.length === 0 ? (
+              <View style={styles.emptySearchBox}>
+                <Ionicons name="search-outline" size={32} color="#94A3B8" />
+                <Text style={styles.emptySearchText}>لا توجد نتائج تطابق بحثك</Text>
+              </View>
+            ) : undefined
+          }
+          ListFooterComponent={
+            displayedNews.length > visibleCount ? (
+              <View style={styles.infiniteLoadingRow}>
+                <ActivityIndicator size="small" color="#973c00" />
+                <Text style={styles.infiniteLoadingText}>
+                  جاري تجهيز المزيد من أخبار القرية...
+                </Text>
+              </View>
+            ) : undefined
+          }
+        />
+      )}
+
+      {/* المودال الشفاف للإشعارات السحابية التفاعلية */}
       <NotificationsModal
         visible={showNotificationsModal}
         notifications={notifications}
         loading={notifsLoading}
+        onClose={() => setShowNotificationsModal(false)}
         onSelectItem={handleNotificationSelect}
         onClearAll={clearAllNotifications}
-        onClose={() => setShowNotificationsModal(false)}
       />
     </View>
   );
@@ -377,34 +379,34 @@ export function NewsHomeScreen() {
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: '#FAF5EE',
+    backgroundColor: '#F8FAFC',
   },
   statusBarShield: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 150,
-    backgroundColor: '#FAF5EE',
+    backgroundColor: '#973c00',
+    zIndex: 99,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 5,
+    paddingHorizontal: 12,
   },
   sectionHeaderRow: {
+    flexDirection: rtlFlexDirection,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
     marginBottom: 12,
+    marginTop: 4,
   },
   sectionHeader: {
-    fontSize: 18,
+    fontSize: 16.5,
     fontWeight: '800',
     color: '#0F172A',
-    textAlign: 'right',
+    letterSpacing: -0.2,
   },
-  smallNewsList: {
-    gap: 12,
-  },
-  infiniteLoadingBox: {
+  infiniteLoadingRow: {
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
     justifyContent: 'center',
@@ -449,15 +451,24 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#334155',
-    marginTop: 12,
-    textAlign: 'center',
+    color: '#1E293B',
+    marginBottom: 6,
   },
   emptyDesc: {
     fontSize: 13,
     color: '#64748B',
-    marginTop: 6,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  emptySearchBox: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptySearchText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '600',
   },
 });

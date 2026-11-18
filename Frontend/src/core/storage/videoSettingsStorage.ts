@@ -1,34 +1,22 @@
-import { requireOptionalNativeModule } from 'expo-modules-core';
 import { getSecureItem, setSecureItem } from '@/core/auth-storage/sessionStorage';
 
 const AUTOPLAY_WIFI_KEY = 'elmansheya_autoplay_wifi_v1';
-
-// تحميل وحدة الشبكة ديناميكياً بأمان تام دون أي انهيار لو كانت غير مترجمة في APK الهاتف
-let ExpoNetworkModule: any = null;
-try {
-  if (Boolean(requireOptionalNativeModule('ExpoNetwork'))) {
-    ExpoNetworkModule = require('expo-network');
-  }
-} catch {
-  ExpoNetworkModule = null;
-}
 
 type Listener = (enabled: boolean) => void;
 const listeners = new Set<Listener>();
 
 /**
- * فحص هل الاتصال الحالي هو Wi-Fi
+ * فحص هل الاتصال الحالي هو Wi-Fi بطريقة آمنة 100% دون استدعاء أي مكتبات خارجية قد تسبب انهيار التطبيق
+ * إذا كانت وحدة الشبكة الأصلية غير مترجمة في ملف الـ APK الحالي، يتم اعتماد الاتصال متاحاً تلقائياً
  */
 export async function isWifiConnection(): Promise<boolean> {
   try {
-    if (ExpoNetworkModule) {
-      const state = await ExpoNetworkModule.getNetworkStateAsync();
-      const wifiType = ExpoNetworkModule.NetworkStateType?.WIFI || 'WIFI';
+    const nativeExpo = (globalThis as any)?.expo?.modules?.ExpoNetwork;
+    if (nativeExpo && typeof nativeExpo.getNetworkStateAsync === 'function') {
+      const state = await nativeExpo.getNetworkStateAsync();
+      const wifiType = nativeExpo.NetworkStateType?.WIFI || 'WIFI';
       return state?.type === wifiType;
     }
-
-    // إذا لم تكن وحدة ExpoNetwork الأصلية مترجمة في ملف الـ APK الحالي،
-    // نعتمد الاتصال مفعل ومتاح للتشغيل التلقائي فوراً حتى يعمل الفيديو بسلاسة للمستخدم
     return true;
   } catch {
     return true;
