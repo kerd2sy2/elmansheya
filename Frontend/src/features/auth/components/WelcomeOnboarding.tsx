@@ -75,7 +75,7 @@ export function WelcomeOnboarding({ onStartAuth }: WelcomeOnboardingProps) {
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetX = event.nativeEvent.contentOffset.x;
-    const index = Math.round(offsetX / SCREEN_WIDTH);
+    const index = Math.round(Math.abs(offsetX) / SCREEN_WIDTH);
     if (index >= 0 && index < ONBOARDING_SLIDES.length && index !== activeIndex) {
       setActiveIndex(index);
     }
@@ -135,13 +135,14 @@ export function WelcomeOnboarding({ onStartAuth }: WelcomeOnboardingProps) {
         </Pressable>
       </View>
 
-      {/* سلايدر الشاشات الثلاث */}
+      {/* سلايدر الشاشات الثلاث - معكوس الاتجاه طبقاً لطلب المستخدم */}
       <FlatList
         ref={flatListRef}
         data={ONBOARDING_SLIDES}
         renderItem={renderSlide}
         keyExtractor={(item) => item.id}
         horizontal
+        inverted
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         bounces={false}

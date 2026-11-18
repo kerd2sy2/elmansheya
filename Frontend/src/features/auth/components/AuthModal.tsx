@@ -13,7 +13,6 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
 import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
 import { useSmoothKeyboardOffset } from '@/core/theme/useSmoothKeyboardOffset';
 import { getCompositeDeviceFingerprint } from '@/core/security/deviceFingerprint';
@@ -213,10 +212,17 @@ export function AuthModal({ visible, onClose }: AuthModalProps) {
     };
   }, [phase, resendTimer]);
 
-  // لصق كود التحقق من الحافظة تلقائياً أو عند الضغط
+  // لصق كود التحقق من الحافظة بأمان دون حدوث أي خطأ
   const handlePasteFromClipboard = async () => {
     try {
-      const text = await Clipboard.getStringAsync();
+      let text = '';
+      try {
+        const mod = require('expo-clipboard');
+        if (mod && typeof mod.getStringAsync === 'function') {
+          text = await mod.getStringAsync();
+        }
+      } catch {}
+
       if (!text) return;
       const digits = text.replace(/[^0-9]/g, '');
       if (digits.length >= 4) {
