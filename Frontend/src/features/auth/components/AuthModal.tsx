@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
 import { useSmoothKeyboardOffset } from '@/core/theme/useSmoothKeyboardOffset';
 import { getCompositeDeviceFingerprint } from '@/core/security/deviceFingerprint';
@@ -211,6 +212,27 @@ export function AuthModal({ visible, onClose }: AuthModalProps) {
       if (timer) clearInterval(timer);
     };
   }, [phase, resendTimer]);
+
+  // لصق كود التحقق من الحافظة تلقائياً أو عند الضغط
+  const handlePasteFromClipboard = async () => {
+    try {
+      const text = await Clipboard.getStringAsync();
+      if (!text) return;
+      const digits = text.replace(/[^0-9]/g, '');
+      if (digits.length >= 4) {
+        const code = digits.substring(0, 4);
+        setOtpCode(code);
+        setErrorText(null);
+        handleVerifyOtp(code);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (phase === 'otp') {
+      handlePasteFromClipboard();
+    }
+  }, [phase]);
 
   const handleDialCodeChange = (text: string) => {
     let clean = text.trim();
@@ -593,6 +615,16 @@ export function AuthModal({ visible, onClose }: AuthModalProps) {
                     textAlign="center"
                     autoFocus
                   />
+
+                  {/* زر سريع للصق الكود من الحافظة */}
+                  <Pressable
+                    style={styles.pasteBtn}
+                    onPress={handlePasteFromClipboard}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="clipboard-outline" size={16} color="#38bdf8" />
+                    <Text style={styles.pasteBtnText}>لصق الكود المنسوخ من واتساب 📋</Text>
+                  </Pressable>
                 </View>
 
                 {/* زر تأكيد الكود */}
@@ -995,6 +1027,23 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 16,
     paddingVertical: 12,
+  },
+  pasteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    gap: 6,
+    marginTop: 12,
+  },
+  pasteBtnText: {
+    color: '#38bdf8',
+    fontSize: 12,
+    fontWeight: '700',
   },
   devHintBadge: {
     backgroundColor: 'rgba(56, 189, 248, 0.15)',
