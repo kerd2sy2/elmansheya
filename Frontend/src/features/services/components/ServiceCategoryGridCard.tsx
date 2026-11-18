@@ -2,29 +2,38 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { rtlTextAlign } from '@/core/theme/rtl';
-import { ServiceCategoryItem } from '../types/services.types';
+import { ServiceCategoryItem, ServiceSubCategory } from '../types/services.types';
 
 interface ServiceCategoryGridCardProps {
-  item: ServiceCategoryItem;
+  item: ServiceCategoryItem | ServiceSubCategory;
   isSelected?: boolean;
   onPress: () => void;
+  count?: number;
 }
 
 export function ServiceCategoryGridCard({
   item,
   isSelected,
   onPress,
+  count,
 }: ServiceCategoryGridCardProps) {
   return (
     <Pressable
       style={[styles.card, isSelected && styles.cardSelected]}
       onPress={onPress}>
-      <View style={[styles.iconBox, isSelected && styles.iconBoxSelected]}>
-        <Ionicons
-          name={item.icon as keyof typeof Ionicons.glyphMap}
-          size={22}
-          color={isSelected ? '#FFFFFF' : '#973c00'}
-        />
+      <View style={styles.topRow}>
+        <View style={[styles.iconBox, isSelected && styles.iconBoxSelected]}>
+          <Ionicons
+            name={item.icon as keyof typeof Ionicons.glyphMap}
+            size={22}
+            color={isSelected ? '#FFFFFF' : '#973c00'}
+          />
+        </View>
+        {typeof count === 'number' && count > 0 ? (
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText}>{count}</Text>
+          </View>
+        ) : null}
       </View>
       <Text style={[styles.title, isSelected && styles.titleSelected]}>
         {item.name_ar}
@@ -44,8 +53,28 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    alignItems: 'flex-end',
+    alignItems: 'stretch',
     marginBottom: 10,
+  },
+  topRow: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    width: '100%',
+  },
+  countBadge: {
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+  },
+  countBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#973c00',
   },
   cardSelected: {
     borderColor: '#973c00',
@@ -58,7 +87,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF7ED',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
   },
   iconBoxSelected: {
     backgroundColor: '#973c00',
