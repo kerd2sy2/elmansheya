@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   I18nManager,
@@ -52,56 +52,169 @@ interface InlineDriveVideoPlayerProps {
   videoUrl: string;
   coverImageUrl?: string | null;
   height?: number;
+  isActive?: boolean;
 }
 
 /**
  * المشغل الأصيل فائق السرعة عبر مكتبة expo-video (ExoPlayer للأندرويد)
- * يعرض الفيديو مباشرة وبأعلى دقة أصلية داخل الشاشة ومدمجاً في المنشور
+ * بنمط Instagram & Twitter: تشغيل ذكي عند التمرير، كتم صوت افتراضي مع زر كتم/تشغيل،
+ * زر تكبير شاشة كاملة، وبدون شريط تقديم أو تأخير داخل بطاقة الرئيسية.
  */
 function NativeExoPlayerView({
   streamUrl,
   height,
+  isActive,
+  autoPlayAllowed,
 }: {
   streamUrl: string;
   height: number;
+  isActive: boolean;
+  autoPlayAllowed: boolean;
 }) {
+  const videoViewRef = useRef<any>(null);
   const { useVideoPlayer, VideoView } = ExpoVideoModule;
+
+  // صامت افتراضياً عند التصفح السريع لتجنب إزعاج المستخدم
+  const [isMuted, setIsMuted] = useState<boolean>(true);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [manuallyPaused, setManuallyPaused] = useState<boolean>(false);
+
   const player = useVideoPlayer(streamUrl, (p: any) => {
     p.loop = true;
-    p.muted = false;
-    try {
-      p.play();
-    } catch {}
+    p.muted = true;
   });
 
   useEffect(() => {
-    try {
-      player?.play();
-    } catch {}
+    if (!player) return;
+    const subPlaying = player.addListener?.('playingChange', (ev: any) => {
+      setIsPlaying(ev.isPlaying);
+    });
+    const subMuted = player.addListener?.('mutedChange', (ev: any) => {
+      setIsMuted(ev.isMuted);
+    });
+    return () => {
+      subPlaying?.remove();
+      subMuted?.remove();
+    };
   }, [player]);
 
+  // إدارة التشغيل التلقائي عند التمرير:
+  // - يشتغل فقط عندما يصبح الفيديو في منتصف الشاشة (isActive=true)
+  // - يتوقف فوراً عند عمل سكرول ومغادرة الشاشة (isActive=false)
+  // - إذا أوقفه المستخدم بيده، يظل متوقفاً حتى يضغط عليه بيده مجدداً
+  useEffect(() => {
+    if (!player) return;
+
+    if (isActive) {
+      if (autoPlayAllowed && !manuallyPaused) {
+        try {
+          player.play();
+        } catch {}
+      }
+    } else {
+      // إيقاف فوري عند السحب بعيداً
+      try {
+        player.pause();
+      } catch {}
+    }
+  }, [isActive, manuallyPaused, autoPlayAllowed, player]);
+
+  // الضغط المباشر على الفيديو للإيقاف المؤقت أو التشغيل
+  const handleTogglePlayPause = () => {
+    if (!player) return;
+    if (player.playing) {
+      setManuallyPaused(true);
+      try {
+        player.pause();
+      } catch {}
+    } else {
+      setManuallyPaused(false);
+      try {
+        player.play();
+      } catch {}
+    }
+  };
+
+  // تبديل الصوت
+  const handleToggleMute = (e: any) => {
+    e?.stopPropagation?.();
+    if (!player) return;
+    player.muted = !player.muted;
+  };
+
+  // تكبير الفيديو للحجم الكامل
+  const handleFullscreen = (e: any) => {
+    e?.stopPropagation?.();
+    try {
+      videoViewRef.current?.enterFullscreen();
+    } catch {}
+  };
+
   return (
-    <View style={[styles.container, { height }]}>
+    <Pressable
+      style={[styles.container, { height }]}
+      onPress={handleTogglePlayPause}
+      accessibilityLabel="تشغيل أو إيقاف الفيديو">
       <VideoView
+        ref={videoViewRef}
         style={styles.nativeVideo}
         player={player}
-        nativeControls={true}
+        nativeControls={false}
         allowsFullscreen={true}
         contentFit="contain"
       />
-    </View>
+
+      {/* زر التشغيل الشفاف في المنتصف عند التوقف المؤقت */}
+      {!isPlaying ? (
+        <View style={styles.centerPlayOverlay} pointerEvents="none">
+          <View style={styles.centerPlayCircle}>
+            <Ionicons
+              name="play"
+              size={32}
+              color="#FFFFFF"
+              style={{ marginLeft: I18nManager.isRTL ? -2 : 3 }}
+            />
+          </View>
+        </View>
+      ) : null}
+
+      {/* أزرار التحكم الأنيقة أسفل الفيديو: كتم/فتح الصوت + زر تكبير الشاشة بالحجم الطبيعي */}
+      <View style={styles.controlsBottomRow} pointerEvents="box-none">
+        <Pressable
+          style={styles.circleControlBtn}
+          onPress={handleToggleMute}
+          hitSlop={8}
+          accessibilityLabel="كتم أو تشغيل الصوت">
+          <Ionicons
+            name={isMuted ? 'volume-mute' : 'volume-high'}
+            size={18}
+            color="#FFFFFF"
+          />
+        </Pressable>
+
+        <Pressable
+          style={styles.circleControlBtn}
+          onPress={handleFullscreen}
+          hitSlop={8}
+          accessibilityLabel="تكبير بالحجم الطبيعي الكامل">
+          <Ionicons name="expand" size={17} color="#FFFFFF" />
+        </Pressable>
+      </View>
+    </Pressable>
   );
 }
 
 /**
- * المشغل السحابي عبر WebView مدمج
+ * المشغل السحابي عبر WebView مدمج (كبديل في حال عدم توفر مشغل أندرويد الأصيل)
  */
 function EmbeddedWebViewPlayer({
   previewUrl,
   height,
+  isActive,
 }: {
   previewUrl: string;
   height: number;
+  isActive: boolean;
 }) {
   const [loading, setLoading] = useState(true);
   const WebViewComponent = WebViewModule;
@@ -109,12 +222,25 @@ function EmbeddedWebViewPlayer({
     ? `${previewUrl}&autoplay=1`
     : `${previewUrl}?autoplay=1`;
 
+  if (!isActive) {
+    return (
+      <View style={[styles.container, styles.darkPoster, { height }]}>
+        <Ionicons name="film-outline" size={42} color="#334155" />
+        <View style={styles.centerPlayOverlay} pointerEvents="none">
+          <View style={styles.centerPlayCircle}>
+            <Ionicons name="play" size={32} color="#FFFFFF" />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { height }]}>
       {loading ? (
         <View style={[styles.loadingBox, { height }]}>
           <ActivityIndicator size="small" color="#973c00" />
-          <Text style={styles.loadingText}>جاري تجهيز مشغل الفيديو السحابي...</Text>
+          <Text style={styles.loadingText}>جاري تجهيز مشغل الفيديو...</Text>
         </View>
       ) : null}
       <WebViewComponent
@@ -137,25 +263,30 @@ export function InlineDriveVideoPlayer({
   videoUrl,
   coverImageUrl,
   height = 240,
+  isActive = false,
 }: InlineDriveVideoPlayerProps) {
-  // الحالة المبدئية: لا يتم تشغيل الفيديو إلا إذا كان المستخدم على Wi-Fi ومفعل التشغيل التلقائي
+  const [autoPlayAllowed, setAutoPlayAllowed] = useState<boolean>(true);
   const [userWantsToPlay, setUserWantsToPlay] = useState<boolean>(false);
+
+  const fileId = extractGoogleDriveFileId(videoUrl);
+  const directStreamUrl = getDirectVideoUrl(videoUrl);
+  const previewUrl = getGoogleDrivePreviewUrl(videoUrl);
 
   useEffect(() => {
     let isMounted = true;
     shouldAutoPlayVideoNow().then((canAutoPlay) => {
-      if (isMounted && canAutoPlay) {
-        setUserWantsToPlay(true);
+      if (isMounted) {
+        setAutoPlayAllowed(canAutoPlay);
+        if (canAutoPlay) {
+          setUserWantsToPlay(true);
+        }
       }
     });
 
     const unsubscribe = subscribeToAutoPlaySetting((enabled) => {
-      if (!enabled) {
-        if (isMounted) setUserWantsToPlay(false);
-      } else {
-        shouldAutoPlayVideoNow().then((canAutoPlay) => {
-          if (isMounted) setUserWantsToPlay(canAutoPlay);
-        });
+      if (isMounted) {
+        setAutoPlayAllowed(enabled);
+        if (!enabled) setUserWantsToPlay(false);
       }
     });
 
@@ -164,10 +295,6 @@ export function InlineDriveVideoPlayer({
       unsubscribe();
     };
   }, []);
-
-  const fileId = extractGoogleDriveFileId(videoUrl);
-  const directStreamUrl = getDirectVideoUrl(videoUrl);
-  const previewUrl = getGoogleDrivePreviewUrl(videoUrl);
 
   const handleFallbackPlay = async () => {
     try {
@@ -182,7 +309,30 @@ export function InlineDriveVideoPlayer({
     }
   };
 
-  // ١. شاشة الغلاف مع زر تشغيل عصري خفيف جداً على الذاكرة بدون تشغيل أي محرك فيديو قبل الضغط
+  // ١. المشغل الأصيل فائق السرعة عبر مكتبة expo-video (ExoPlayer للأندرويد)
+  if (ExpoVideoModule && directStreamUrl) {
+    return (
+      <NativeExoPlayerView
+        streamUrl={directStreamUrl}
+        height={height}
+        isActive={isActive}
+        autoPlayAllowed={autoPlayAllowed}
+      />
+    );
+  }
+
+  // ٢. المشغل السحابي عبر WebView مدمج
+  if (WebViewModule && previewUrl) {
+    return (
+      <EmbeddedWebViewPlayer
+        previewUrl={previewUrl}
+        height={height}
+        isActive={isActive}
+      />
+    );
+  }
+
+  // ٣. غلاف أنيق في حال كانت نسخة الـ APK قديمة بدون الوحدات الأصلية
   if (!userWantsToPlay) {
     return (
       <Pressable
@@ -219,17 +369,6 @@ export function InlineDriveVideoPlayer({
     );
   }
 
-  // ٢. إذا كانت مكتبة expo-video متاحة في نسخة التطبيق المترجمة (الوضع الأصيل المثالي)
-  if (ExpoVideoModule && directStreamUrl) {
-    return <NativeExoPlayerView streamUrl={directStreamUrl} height={height} />;
-  }
-
-  // ٣. إذا كانت وحدة WebView متوفرة في نسخة التطبيق المترجمة
-  if (WebViewModule && previewUrl) {
-    return <EmbeddedWebViewPlayer previewUrl={previewUrl} height={height} />;
-  }
-
-  // ٤. بديل احتياطي أنيق إذا كانت نسخة الهاتف القديمة لا تحتوي على الوحدات الأصلية بعد
   return (
     <Pressable
       style={[styles.container, styles.fallbackContainer, { height }]}
@@ -346,5 +485,44 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 12,
     textAlign: 'center',
+  },
+  centerPlayOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    zIndex: 15,
+  },
+  centerPlayCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#973c00',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  controlsBottomRow: {
+    position: 'absolute',
+    bottom: 10,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 20,
+  },
+  circleControlBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
 });

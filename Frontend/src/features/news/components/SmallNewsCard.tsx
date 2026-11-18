@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import {
   I18nManager,
   LayoutAnimation,
+  LayoutChangeEvent,
   Platform,
   Pressable,
   Share,
@@ -20,6 +21,8 @@ import { NewsCardItem } from '../types/news.types';
 interface SmallNewsCardProps {
   item: NewsCardItem;
   onPress?: (item: NewsCardItem) => void;
+  isActive?: boolean;
+  onLayout?: (e: LayoutChangeEvent) => void;
 }
 
 function formatPublishTimeAndDate(isoString: string): { time: string; date: string } {
@@ -144,6 +147,8 @@ export function parseAuthorInfo(
 
 export const SmallNewsCard = React.memo(function SmallNewsCard({
   item,
+  isActive = false,
+  onLayout,
 }: SmallNewsCardProps) {
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const { time, date } = formatPublishTimeAndDate(item.published_at);
@@ -178,7 +183,7 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
   };
 
   return (
-    <View style={styles.card}>
+    <View style={styles.card} onLayout={onLayout}>
       {/* ١. رأس البوست الأنيق: صورة الناشر، اسمه الصافي، ودوره/قسمه تحته مباشرة */}
       <View style={styles.header}>
         <View style={styles.authorRow}>
@@ -259,6 +264,7 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
             videoUrl={directVideoUrl!}
             coverImageUrl={directCoverUrl}
             height={205}
+            isActive={isActive}
           />
         </View>
       ) : hasImage ? (

@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Dimensions,
   Easing,
   Modal,
   NativeScrollEvent,
@@ -92,6 +93,12 @@ export function NewsHomeScreen() {
   const isAnimating = useRef(false);
   const scrollDelta = useRef(0);
 
+  // إدارة تشغيل الفيديو النشط أثناء التمرير (فيديو واحد فقط يعمل تلقائياً عند توسط الشاشة)
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  const activeVideoIdRef = useRef<string | null>(null);
+  const cardLayoutsRef = useRef<Map<string, { y: number; height: number }>>(new Map());
+  const listOffsetYRef = useRef<number>(0);
+
   // مراجع تشغيل أنميشن اللوجو وحماية السيرفر من تكرار الطلبات العشوائية
   const lottieRef = useRef<LottieView>(null);
   const lastLogoPressFetchRef = useRef<number>(0);
@@ -130,53 +137,6 @@ export function NewsHomeScreen() {
     }).start(() => {
       isAnimating.current = false;
     });
-  };
-
-  // معالجة التمرير بحسابات ناعمة وتمرير لا نهائي تلقائي (30 ثم 30)
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const currentY = contentOffset.y;
-
-    // تمرير لا نهائي تلقائي (Infinite Scroll): تحميل 30 منشوراً تالياً فور الاقتراب من القاع
-    const isCloseToBottom = layoutMeasurement.height + currentY >= contentSize.height - 400;
-    if (isCloseToBottom && displayedNews.length > visibleCount) {
-      setVisibleCount((prev) => Math.min(prev + 30, displayedNews.length));
-    }
-
-    // أ) إذا كان المستخدم في قمة الصفحة (<= 15px): أظهر الهيدر فوراً وتفادَ ارتداد iOS
-    if (currentY <= 15) {
-      if (isHeaderHidden.current) {
-        isHeaderHidden.current = false;
-        Animated.timing(headerTranslateY, {
-          toValue: 0,
-          duration: 180,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }).start();
-      }
-      scrollDelta.current = 0;
-      lastScrollY.current = currentY;
-      return;
-    }
-
-    const diff = currentY - lastScrollY.current;
-    lastScrollY.current = currentY;
-
-    // ب) السحب لأسفل (Scroll Down): إخفاء ناعم بعد تحرك فعلي 18px وتجاوز 50px من القمة
-    if (diff > 0 && currentY > 50) {
-      scrollDelta.current = Math.max(0, scrollDelta.current + diff);
-      if (scrollDelta.current >= 18) {
-        scrollDelta.current = 0;
-        hideHeader();
-      }
-    } else if (diff < 0) {
-      // ج) السحب لأعلى (Scroll Up): إظهار فوري وسلس بعد تحرك 16px للأعلى
-      scrollDelta.current = Math.min(0, scrollDelta.current + diff);
-      if (scrollDelta.current <= -16) {
-        scrollDelta.current = 0;
-        showHeader();
-      }
-    }
   };
 
   const [hasNewNewsUpdate, setHasNewNewsUpdate] = useState<boolean>(false);
@@ -327,6 +287,100 @@ export function NewsHomeScreen() {
   const visibleNews = useMemo(() => {
     return displayedNews.slice(0, visibleCount);
   }, [displayedNews, visibleCount]);
+
+  // فحص الفيديو الذي يتوسط الشاشة حالياً وتشغيله هو فقط وإيقاف الباقي فوراً
+  const updateActiveVideo = (scrollY: number, viewportHeight: number) => {
+    const viewportCenter = scrollY + viewportHeight / 2;
+    const listY = listOffsetYRef.current;
+    let closestId: string | null = null;
+    let minDistance = Infinity;
+
+    for (const item of visibleNews) {
+      const hasVid = Boolean(item.video_stream_url);
+      if (!hasVid) continue;
+
+      const layout = cardLayoutsRef.current.get(item.id);
+      if (!layout) continue;
+
+      const absCardY = listY + layout.y;
+      const absCardBottom = absCardY + layout.height;
+
+      // هل البطاقة مرئية حالياً في نطاق الشاشة؟
+      const isVisibleInViewport =
+        absCardBottom > scrollY + 40 && absCardY < scrollY + viewportHeight - 40;
+
+      if (isVisibleInViewport) {
+        const cardCenter = absCardY + layout.height / 2;
+        const dist = Math.abs(cardCenter - viewportCenter);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestId = item.id;
+        }
+      }
+    }
+
+    if (closestId !== activeVideoIdRef.current) {
+      activeVideoIdRef.current = closestId;
+      setActiveVideoId(closestId);
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      updateActiveVideo(lastScrollY.current, Dimensions.get('window').height);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [visibleNews]);
+
+  // معالجة التمرير بحسابات ناعمة وتمرير لا نهائي تلقائي (30 ثم 30)
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const currentY = contentOffset.y;
+
+    // تحديث الفيديو النشط بحسب ما يتوسط نافذة الرؤية
+    updateActiveVideo(currentY, layoutMeasurement.height);
+
+    // تمرير لا نهائي تلقائي (Infinite Scroll): تحميل 30 منشوراً تالياً فور الاقتراب من القاع
+    const isCloseToBottom = layoutMeasurement.height + currentY >= contentSize.height - 400;
+    if (isCloseToBottom && displayedNews.length > visibleCount) {
+      setVisibleCount((prev) => Math.min(prev + 30, displayedNews.length));
+    }
+
+    // أ) إذا كان المستخدم في قمة الصفحة (<= 15px): أظهر الهيدر فوراً وتفادَ ارتداد iOS
+    if (currentY <= 15) {
+      if (isHeaderHidden.current) {
+        isHeaderHidden.current = false;
+        Animated.timing(headerTranslateY, {
+          toValue: 0,
+          duration: 180,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }).start();
+      }
+      scrollDelta.current = 0;
+      lastScrollY.current = currentY;
+      return;
+    }
+
+    const diff = currentY - lastScrollY.current;
+    lastScrollY.current = currentY;
+
+    // ب) السحب لأسفل (Scroll Down): إخفاء ناعم بعد تحرك فعلي 18px وتجاوز 50px من القمة
+    if (diff > 0 && currentY > 50) {
+      scrollDelta.current = Math.max(0, scrollDelta.current + diff);
+      if (scrollDelta.current >= 18) {
+        scrollDelta.current = 0;
+        hideHeader();
+      }
+    } else if (diff < 0) {
+      // ج) السحب لأعلى (Scroll Up): إظهار فوري وسلس بعد تحرك 16px للأعلى
+      scrollDelta.current = Math.min(0, scrollDelta.current + diff);
+      if (scrollDelta.current <= -16) {
+        scrollDelta.current = 0;
+        showHeader();
+      }
+    }
+  };
 
   return (
     <View style={styles.screenContainer}>
@@ -524,11 +578,19 @@ export function NewsHomeScreen() {
             </View>
           ) : null}
           {(displayedNews?.length ?? 0) > 0 ? (
-            <View style={styles.smallNewsList}>
+            <View
+              style={styles.smallNewsList}
+              onLayout={(e) => {
+                listOffsetYRef.current = e.nativeEvent.layout.y;
+              }}>
               {visibleNews.map((item) => (
                 <SmallNewsCard
                   key={item.id}
                   item={item}
+                  isActive={activeVideoId === item.id}
+                  onLayout={(e) => {
+                    cardLayoutsRef.current.set(item.id, e.nativeEvent.layout);
+                  }}
                 />
               ))}
               {displayedNews.length > visibleCount ? (
