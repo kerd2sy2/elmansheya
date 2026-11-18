@@ -95,7 +95,8 @@
           "color": "#973c00",
           "defaultChannel": "elmansheya_alerts_v2"
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

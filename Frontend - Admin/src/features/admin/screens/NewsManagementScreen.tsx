@@ -24,6 +24,7 @@ import { useAuth } from '@/features/auth/context/AuthContext';
 import { canAccessSection } from '@/core/permissions/adminRoles';
 import { API_BASE_URL } from '@/core/config/api.config';
 import { useNewsFeed } from '@/features/news/hooks/useNewsFeed';
+import { InlineDriveVideoPlayer } from '../components/InlineDriveVideoPlayer';
 
 // دالة ذكية لتحويل أي رابط مشاركة من Google Drive أو السيرفر إلى رابط استعراض فائق السرعة
 function parseDriveLink(rawUrl: string): { directUrl: string; isDrive: boolean } {
@@ -512,28 +513,11 @@ export function NewsManagementScreen() {
           />
 
           {driveVideoUrl ? (
-            <Pressable
-              style={styles.previewVideoBtn}
-              onPress={async () => {
-                const matchId = driveVideoUrl.match(/[\/=]([a-zA-Z0-9_-]{25,})/);
-                const fileId = matchId ? matchId[1] : '';
-                const previewUrl = fileId
-                  ? `https://drive.google.com/file/d/${fileId}/preview`
-                  : driveVideoUrl;
-                try {
-                  await WebBrowser.openBrowserAsync(previewUrl, {
-                    presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-                    toolbarColor: '#973c00',
-                    controlsColor: '#FFFFFF',
-                    showTitle: true,
-                  });
-                } catch {
-                  // ignore
-                }
-              }}>
-              <Ionicons name="play-circle" size={20} color="#973c00" />
-              <Text style={styles.previewVideoBtnText}>معاينة وتشغيل الفيديو الآن داخل التطبيق بأعلى جودة</Text>
-            </Pressable>
+            <InlineDriveVideoPlayer
+              videoUrl={driveVideoUrl}
+              coverImageUrl={parsedImage.directUrl || driveImageUrl}
+              height={200}
+            />
           ) : null}
 
           {/* خيارات التثبيت والأخبار العاجلة */}

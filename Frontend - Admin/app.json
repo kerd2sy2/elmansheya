@@ -59,7 +59,8 @@
           "style": "dark",
           "enforceContrast": false
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

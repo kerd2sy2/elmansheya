@@ -52,10 +52,22 @@ export function getDirectImageUrl(rawUrl: string | null | undefined): string {
 }
 
 /**
- * تحويل رابط درايف للفيديوهات إلى رابط البث المباشر (Preview Stream)
- * يفتح مشغل الفيديو السحابي المدمج دون الحاجة للتحميل ودون استهلاك مساحة السيرفر
+ * تحويل رابط درايف للفيديوهات إلى رابط البث المباشر (Direct Stream)
+ * يعمل مباشرة مع المشغل الأصيل (expo-video / ExoPlayer) بدقة كاملة وبدون تحميل
  */
 export function getDirectVideoUrl(rawUrl: string | null | undefined): string {
+  if (!rawUrl || isLegacyOrStaleLocalUrl(rawUrl)) return '';
+  const fileId = extractGoogleDriveFileId(rawUrl);
+  if (fileId) {
+    return `https://drive.usercontent.google.com/download?id=${fileId}&export=download`;
+  }
+  return rawUrl;
+}
+
+/**
+ * تحويل رابط درايف إلى رابط معاينة المشغل المدمج (Google Drive Preview Player)
+ */
+export function getGoogleDrivePreviewUrl(rawUrl: string | null | undefined): string {
   if (!rawUrl || isLegacyOrStaleLocalUrl(rawUrl)) return '';
   const fileId = extractGoogleDriveFileId(rawUrl);
   if (fileId) {

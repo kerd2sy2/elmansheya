@@ -20,6 +20,7 @@ import { useSafeTopInset } from '@/core/theme/useSafeTopInset';
 import { getDirectImageUrl, getDirectVideoUrl } from '@/core/utils/googleDrive';
 import { NewsCardItem } from '../types/news.types';
 import { parseAuthorInfo } from '../components/SmallNewsCard';
+import { InlineDriveVideoPlayer } from '../components/InlineDriveVideoPlayer';
 
 interface NewsDetailScreenProps {
   newsId: string;
@@ -207,32 +208,22 @@ export function NewsDetailScreen({
           canCancelContentTouches={true}
           directionalLockEnabled={false}
           overScrollMode="always">
-          {/* غلاف المنشور أو وسائط الفيديو من جوجل درايف أو الروابط المباشرة */}
-          {directCoverUrl ? (
-            <Pressable
-              style={styles.mediaContainer}
-              disabled={!directVideoUrl}
-              onPress={handlePlayVideo}>
+          {/* غلاف المنشور ومشغل الفيديو المدمج مباشرة داخل شاشة الخبر */}
+          {directVideoUrl ? (
+            <InlineDriveVideoPlayer
+              videoUrl={directVideoUrl}
+              coverImageUrl={directCoverUrl}
+              height={240}
+            />
+          ) : directCoverUrl ? (
+            <View style={styles.mediaContainer}>
               <Image
                 source={{ uri: directCoverUrl }}
                 style={styles.coverImage}
                 contentFit="cover"
                 transition={200}
               />
-              {directVideoUrl ? (
-                <View style={styles.mediaBadgeOverlay}>
-                  <Ionicons name="videocam" size={14} color="#FFFFFF" />
-                  <Text style={styles.mediaBadgeText}>تشغيل الفيديو</Text>
-                </View>
-              ) : null}
-            </Pressable>
-          ) : directVideoUrl ? (
-            <Pressable style={styles.videoOnlyBanner} onPress={handlePlayVideo}>
-              <View style={styles.playCircle}>
-                <Ionicons name="play" size={26} color="#FFFFFF" style={{ marginLeft: 2 }} />
-              </View>
-              <Text style={styles.videoOnlyBannerText}>اضغط لتشغيل الفيديو المرفق</Text>
-            </Pressable>
+            </View>
           ) : null}
 
           <View style={styles.bodyWrap}>
