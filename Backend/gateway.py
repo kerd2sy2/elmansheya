@@ -294,11 +294,26 @@ def _send_fcm_v1_message(access_tok, project_id, target_key, target_val, title, 
     payload = json.dumps({
         'message': {
             target_key: target_val,
-            'notification': {'title': title, 'body': body},
+            'notification': {
+                'title': title,
+                'body': body
+            },
             'data': str_data,
             'android': {
-                'priority': 'high',
-                'notification': {'channel_id': 'elmansheya_alerts_v2', 'sound': 'default'},
+                'priority': 'HIGH',
+                'ttl': '86400s',
+                'notification': {
+                    'title': title,
+                    'body': body,
+                    'channel_id': 'elmansheya_alerts_v2',
+                    'notification_priority': 'PRIORITY_MAX',
+                    'visibility': 'PUBLIC',
+                    'default_sound': True,
+                    'default_vibrate_timings': True,
+                    'default_light_settings': True,
+                    'sound': 'default',
+                    'color': '#973c00'
+                },
             },
         }
     }, ensure_ascii=False).encode('utf-8')
@@ -325,7 +340,7 @@ def dispatch_push_to_tokens(title, body, data):
         raw_fcm_tokens = []
         for tok in list(tokens_map.keys()):
             t = str(tok or '').strip()
-            if not t:
+            if not t or len(t) < 20 or t == 'diag':
                 continue
             if t.startswith('ExponentPushToken[') or t.startswith('ExpoPushToken['):
                 expo_messages.append({
