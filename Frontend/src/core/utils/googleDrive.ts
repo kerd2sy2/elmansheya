@@ -52,14 +52,14 @@ export function getDirectImageUrl(rawUrl: string | null | undefined): string {
 }
 
 /**
- * تحويل رابط درايف للفيديوهات إلى رابط بث مباشر (Direct Stream)
- * يعمل مع مشغلات الفيديو دون الحاجة لحفظ المقطع على خادم التطبيق
+ * تحويل رابط درايف للفيديوهات إلى رابط البث المباشر (Preview Stream)
+ * يفتح مشغل الفيديو السحابي المدمج دون الحاجة للتحميل ودون استهلاك مساحة السيرفر
  */
 export function getDirectVideoUrl(rawUrl: string | null | undefined): string {
   if (!rawUrl || isLegacyOrStaleLocalUrl(rawUrl)) return '';
   const fileId = extractGoogleDriveFileId(rawUrl);
   if (fileId) {
-    return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    return `https://drive.google.com/file/d/${fileId}/preview`;
   }
   return rawUrl;
 }

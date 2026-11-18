@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -138,9 +139,15 @@ export function NewsDetailScreen({
   const handlePlayVideo = async () => {
     if (directVideoUrl) {
       try {
-        await Linking.openURL(directVideoUrl);
+        await WebBrowser.openBrowserAsync(directVideoUrl, {
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+          toolbarColor: '#973c00',
+          controlsColor: '#FFFFFF',
+          showTitle: true,
+          enableBarCollapsing: true,
+        });
       } catch {
-        // تجاهل أي خطأ
+        await Linking.openURL(directVideoUrl).catch(() => {});
       }
     }
   };

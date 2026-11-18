@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import { useSafeBottomTabPadding, useSafeTopInset } from '@/core/theme/useSafeTopInset';
 import { rtlFlexDirection } from '@/core/theme/rtl';
@@ -510,6 +511,31 @@ export function NewsManagementScreen() {
             autoCapitalize="none"
           />
 
+          {driveVideoUrl ? (
+            <Pressable
+              style={styles.previewVideoBtn}
+              onPress={async () => {
+                const matchId = driveVideoUrl.match(/[\/=]([a-zA-Z0-9_-]{25,})/);
+                const fileId = matchId ? matchId[1] : '';
+                const previewUrl = fileId
+                  ? `https://drive.google.com/file/d/${fileId}/preview`
+                  : driveVideoUrl;
+                try {
+                  await WebBrowser.openBrowserAsync(previewUrl, {
+                    presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+                    toolbarColor: '#973c00',
+                    controlsColor: '#FFFFFF',
+                    showTitle: true,
+                  });
+                } catch {
+                  // ignore
+                }
+              }}>
+              <Ionicons name="play-circle" size={20} color="#973c00" />
+              <Text style={styles.previewVideoBtnText}>معاينة وتشغيل الفيديو الآن داخل التطبيق بأعلى جودة</Text>
+            </Pressable>
+          ) : null}
+
           {/* خيارات التثبيت والأخبار العاجلة */}
           <View style={styles.optionsDivider} />
 
@@ -854,6 +880,23 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  previewVideoBtn: {
+    flexDirection: rtlFlexDirection,
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 8,
+  },
+  previewVideoBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#973c00',
   },
   optionsDivider: {
     height: 1,

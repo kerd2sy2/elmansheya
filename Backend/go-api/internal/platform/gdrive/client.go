@@ -538,7 +538,7 @@ func (c *Client) UploadDirectToDrive(
 
 	// 4. توليد رابط البث فائق السرعة عبر شبكة Google CDN العالمية
 	if strings.HasPrefix(mimeType, "video/") || strings.HasSuffix(filename, ".mp4") {
-		directURL = fmt.Sprintf("https://drive.google.com/uc?export=view&id=%s", fileID)
+		directURL = fmt.Sprintf("https://drive.google.com/file/d/%s/preview", fileID)
 	} else {
 		directURL = fmt.Sprintf("https://lh3.googleusercontent.com/d/%s", fileID)
 	}
@@ -602,7 +602,7 @@ func (c *Client) uploadViaRclone(
 	// د. توليد رابط الـ CDN المباشر عالي السرعة
 	if fileID != "" {
 		if strings.HasPrefix(mimeType, "video/") || strings.HasSuffix(filename, ".mp4") {
-			directURL = fmt.Sprintf("https://drive.google.com/uc?export=view&id=%s", fileID)
+			directURL = fmt.Sprintf("https://drive.google.com/file/d/%s/preview", fileID)
 		} else {
 			directURL = fmt.Sprintf("https://lh3.googleusercontent.com/d/%s", fileID)
 		}
