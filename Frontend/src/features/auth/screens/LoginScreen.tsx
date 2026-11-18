@@ -191,10 +191,6 @@ export function LoginScreen() {
     setErrorText(null);
   };
 
-  const activeCountryPlaceholder =
-    COUNTRY_OPTIONS.find((c) => c.dialCode === dialCode)?.placeholder ||
-    '01012345678';
-
   const handleSendWhatsAppOtp = async () => {
     Keyboard.dismiss();
     setErrorText(null);
@@ -388,8 +384,6 @@ export function LoginScreen() {
                 </Text>
 
                 <View style={styles.fieldBlock}>
-                  <Text style={styles.fieldLabel}>رقم الهاتف</Text>
-
                   {/* شريط موحد باتجاه LTR: المفتاح على اليسار ثم الفاصل ثم الرقم */}
                   <View style={styles.ltrPhoneBar}>
                     <View style={styles.dialKeyGroup}>
@@ -416,7 +410,7 @@ export function LoginScreen() {
                       style={styles.ltrPhoneInput}
                       value={phone}
                       onChangeText={handlePhoneChange}
-                      placeholder={activeCountryPlaceholder}
+                      placeholder="رقم الهاتف"
                       placeholderTextColor="#94A3B8"
                       keyboardType="phone-pad"
                       maxLength={15}
@@ -892,7 +886,7 @@ const styles = StyleSheet.create({
     direction: 'ltr',
     flexDirection: 'row',
     alignItems: 'center',
-    height: 54,
+    height: 56,
     backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
@@ -902,7 +896,7 @@ const styles = StyleSheet.create({
   dialKeyGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
   dropdownTrigger: {
     padding: 4,
@@ -910,30 +904,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dialCodeInput: {
-    minWidth: 46,
-    fontSize: 16,
-    fontWeight: '800',
+    height: 52,
+    fontSize: 17,
+    fontWeight: '700',
     color: APP_THEME.primary,
-    textAlign: 'left',
+    textAlign: 'center',
     writingDirection: 'ltr',
-    paddingVertical: 4,
+    paddingVertical: 0,
     paddingHorizontal: 2,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   verticalDivider: {
     width: 1,
-    height: 24,
+    height: 22,
     backgroundColor: '#CBD5E1',
-    marginHorizontal: 10,
+    marginLeft: 4,
+    marginRight: 8,
   },
   ltrPhoneInput: {
     flex: 1,
+    height: 52,
     fontSize: 17,
     fontWeight: '700',
     color: '#0F172A',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
     textAlign: 'left',
     writingDirection: 'ltr',
     paddingVertical: 0,
+    paddingHorizontal: 0,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   primaryBtn: {
     width: '100%',
@@ -1098,15 +1099,18 @@ const styles = StyleSheet.create({
     color: '#166534',
   },
   textInput: {
-    height: 50,
+    height: 52,
     backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
     borderRadius: 12,
     paddingHorizontal: 14,
+    paddingVertical: 0,
     fontSize: 15,
     color: '#0F172A',
     textAlign: rtlTextAlign,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   dateRow: {
     direction: 'ltr',
@@ -1125,15 +1129,18 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   dateInput: {
-    height: 48,
+    height: 50,
     backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
     borderRadius: 12,
+    paddingVertical: 0,
     fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
     textAlign: 'center',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   modalBackdrop: {
     flex: 1,
