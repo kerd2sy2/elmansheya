@@ -83,7 +83,6 @@ export function NewsFeedSkeleton() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 12,
     paddingTop: 8,
   },
   card: {

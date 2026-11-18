@@ -379,18 +379,18 @@ export function NewsHomeScreen() {
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAF5EE',
   },
   statusBarShield: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#973c00',
-    zIndex: 99,
+    backgroundColor: '#FAF5EE',
+    zIndex: 150,
   },
   scrollContent: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
   },
   sectionHeaderRow: {
     flexDirection: rtlFlexDirection,
@@ -401,10 +401,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   sectionHeader: {
-    fontSize: 16.5,
+    fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.2,
+    textAlign: 'right',
   },
   infiniteLoadingRow: {
     flexDirection: rtlFlexDirection,
