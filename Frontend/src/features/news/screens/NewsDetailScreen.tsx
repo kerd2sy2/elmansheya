@@ -109,15 +109,14 @@ export function NewsDetailScreen({
     };
   }, [newsId]);
 
-  // مشاركة رابط البوست مع رابط التطبيق
+  // مشاركة رابط الخبر عبر الدومين الرسمي فقط (بدون روابط محلية)
   const handleShare = async () => {
     if (!item) return;
     try {
-      const appDeepLink = Linking.createURL(`news/${item.id}`);
-      const webUrl = `https://elmansheya.app/news/${item.id}`;
+      const webUrl = `https://elmansheya.kerd2sy.com/news/${item.id}`;
       await Share.share({
         title: item.title,
-        message: `${item.title}\n\nتابع تفاصيل الخبر عبر الرابط:\n${webUrl}\n\nأو افتح مباشرة في تطبيق المنشية:\n${appDeepLink}`,
+        message: `${item.title}\n\nتابع تفاصيل الخبر عبر الرابط:\n${webUrl}`,
         url: webUrl,
       });
     } catch {

@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import LottieView from 'lottie-react-native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -9,7 +10,6 @@ import {
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -29,51 +29,66 @@ import { API_BASE_URL } from '@/core/config/api.config';
 import { WidgetErrorBoundary } from '@/core/error-boundary/WidgetErrorBoundary';
 import { registerHomeScrollToTop } from '@/core/events/scrollEvents';
 import { useAuth } from '@/features/auth/context/AuthContext';
+import {
+  IncomingNotificationBanner,
+  NotificationsModal,
+} from '@/features/notifications/components/NotificationsModal';
+import { useNotificationsFeed } from '@/features/notifications/hooks/useNotificationsFeed';
+import { VillageNotificationItem } from '@/features/notifications/types/notifications.types';
 import { publishRealNewsArticle } from '../api/news.api';
 import { SmallNewsCard } from '../components/SmallNewsCard';
 import { useNewsFeed } from '../hooks/useNewsFeed';
 import { NewsCardItem } from '../types/news.types';
 import { NewsDetailScreen } from './NewsDetailScreen';
 
-interface VillageNotificationItem {
-  id: string;
-  title: string;
-  body: string;
-  time_ar: string;
-}
-
-const INITIAL_TEST_NOTIFICATIONS: VillageNotificationItem[] = [
-  {
-    id: 'notif-test-1',
-    title: 'قافلة طبية مجانية غداً بالوحدة الصحية',
-    body: 'تبدأ القافلة الساعة ٩ صباحاً وتشمل تخصصات الباطنة والأطفال والعيون.',
-    time_ar: 'منذ ١٠ دقائق',
-  },
-  {
-    id: 'notif-test-2',
-    title: 'تنبيه صيانة شبكة المياه بالمنشية البحرية',
-    body: 'سيتم ضعف المياه لمدة ساعتين ظهر اليوم لأعمال الصيانة الدورية.',
-    time_ar: 'منذ ساعة',
-  },
-];
-
 const BASE_HEADER_HEIGHT = 60;
 
 export function NewsHomeScreen() {
+  const router = useRouter();
   const topInset = useSafeTopInset();
   const bottomTabPadding = useSafeBottomTabPadding();
   const { user } = useAuth();
   const { feed, loading, refreshing, servedFromCache, isOffline, refresh } =
     useNewsFeed();
+  const {
+    notifications,
+    filteredNotifications,
+    unreadCount,
+    readIds,
+    activeSection,
+    setActiveSection,
+    loading: notifsLoading,
+    refresh: refreshNotifications,
+    markAsRead,
+    markAllAsRead,
+    latestBannerNotification,
+    dismissBanner,
+  } = useNotificationsFeed(user?.phone);
 
   const [selectedNews, setSelectedNews] = useState<NewsCardItem | null>(null);
   const [showSearch, setShowSearch] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showNotificationsModal, setShowNotificationsModal] =
     useState<boolean>(false);
-  const [notifications, setNotifications] = useState<VillageNotificationItem[]>(
-    INITIAL_TEST_NOTIFICATIONS
-  );
+
+  const handleNotificationSelect = (item: VillageNotificationItem) => {
+    markAsRead(item.id);
+    dismissBanner();
+    setShowNotificationsModal(false);
+    if (item.section === 'reports') {
+      router.push('/reports');
+    } else if (item.section === 'craftsmen') {
+      router.push('/craftsmen');
+    } else if (item.section === 'services') {
+      router.push('/services');
+    } else if (item.section === 'news' && item.target_id && feed) {
+      const allNews = [...(feed.pinned_featured || []), ...(feed.small_news || [])];
+      const target = allNews.find((n) => n.id === item.target_id);
+      if (target) {
+        setSelectedNews(target);
+      }
+    }
+  };
 
   const scrollViewRef = useRef<React.ElementRef<typeof ScrollView>>(null);
 
@@ -363,15 +378,18 @@ export function NewsHomeScreen() {
               />
             </Pressable>
 
-            {/* جرس الإشعارات الشفاف مع عداد حقيقي يعمل فقط عند وجود إشعارات */}
+            {/* جرس الإشعارات الشفاف مع عداد حقيقي يعمل فقط عند وجود إشعارات غير مقروءة */}
             <Pressable
               style={styles.headerIconButton}
-              onPress={() => setShowNotificationsModal(true)}>
+              onPress={() => {
+                setShowNotificationsModal(true);
+                refreshNotifications();
+              }}>
               <Ionicons name="notifications-outline" size={23} color="#1E293B" />
-              {notifications.length > 0 ? (
+              {unreadCount > 0 ? (
                 <View style={styles.notifCountBadge}>
                   <Text style={styles.notifCountText}>
-                    {notifications.length}
+                    {unreadCount}
                   </Text>
                 </View>
               ) : null}
@@ -516,89 +534,28 @@ export function NewsHomeScreen() {
         </WidgetErrorBoundary>
       </ScrollView>
 
-      {/* موديول الإشعارات من الأسفل */}
-      <Modal
+      <IncomingNotificationBanner
+        notification={latestBannerNotification}
+        topOffset={topInset + 8}
+        onPress={handleNotificationSelect}
+        onDismiss={dismissBanner}
+      />
+
+      {/* موديول الإشعارات الموحّد لجميع أقسام التطبيق */}
+      <NotificationsModal
         visible={showNotificationsModal}
-        transparent
-        statusBarTranslucent
-        animationType="slide"
-        onRequestClose={() => setShowNotificationsModal(false)}>
-        <Pressable
-          style={styles.sheetOverlay}
-          onPress={() => setShowNotificationsModal(false)}>
-          <Pressable
-            style={[
-              styles.bottomSheetBox,
-              notifications.length === 0 && styles.bottomSheetBoxEmpty,
-            ]}
-            onPress={(e) => e.stopPropagation()}>
-            <View style={styles.sheetDragBar} />
-
-            {notifications.length === 0 ? (
-              <View style={styles.emptyNotifBox}>
-                <LottieView
-                  source={require('../../../../assets/json/btXbjDx6qo.json')}
-                  autoPlay
-                  loop
-                  style={styles.emptyNotifLottie}
-                />
-                <Text style={styles.emptyNotifTitle} numberOfLines={1}>
-                  لا توجد إشعارات جديدة حالياً
-                </Text>
-                <Text style={styles.emptyNotifSub} numberOfLines={1}>
-                  ستصلك التنبيهات فور نشر أخبار أو مناسبات بالقرية
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.notifListWrap}>
-                {notifications.map((n) => (
-                  <Pressable
-                    key={n.id}
-                    style={styles.notifItemCard}
-                    onPress={() =>
-                      setNotifications((prev) =>
-                        prev.filter((item) => item.id !== n.id)
-                      )
-                    }>
-                    {/* عمود النصوص: الوقت في أقصى الشمال، والعنوان والبراجراف يبدآن من اليمين */}
-                    <View style={styles.notifItemTextCol}>
-                      <View style={styles.notifItemTopRow}>
-                        <Text style={styles.notifItemTime}>{n.time_ar}</Text>
-                        <Text style={styles.notifItemTitle} numberOfLines={1}>
-                          {n.title}
-                        </Text>
-                      </View>
-
-                      <View style={styles.notifItemBodyRow}>
-                        <Text style={styles.notifItemBody} numberOfLines={2}>
-                          {n.body}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* أيقونة الإشعار في أقصى اليمين */}
-                    <View style={styles.notifItemIconWrap}>
-                      <Ionicons
-                        name="notifications-outline"
-                        size={18}
-                        color="#973c00"
-                      />
-                    </View>
-                  </Pressable>
-                ))}
-
-                <Pressable
-                  style={styles.clearNotifsBtn}
-                  onPress={() => setNotifications([])}>
-                  <Text style={styles.clearNotifsBtnText}>
-                    تحديد الكل كمقروء
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
+        notifications={notifications}
+        filteredNotifications={filteredNotifications}
+        unreadCount={unreadCount}
+        readIds={readIds}
+        activeSection={activeSection}
+        loading={notifsLoading}
+        onChangeSection={setActiveSection}
+        onRefresh={refreshNotifications}
+        onSelectItem={handleNotificationSelect}
+        onMarkAllAsRead={markAllAsRead}
+        onClose={() => setShowNotificationsModal(false)}
+      />
 
       {/* شاشة تفاصيل الخبر تفتح كـ Modal سلس للغاية وتغلق فورياً بدون أي تأخير أو تهنيج */}
       <Modal
@@ -784,140 +741,6 @@ const styles = StyleSheet.create({
     padding: 2,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  sheetOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'flex-end',
-  },
-  bottomSheetBox: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderBottomWidth: 0,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: Platform.OS === 'android' ? 36 : 48,
-    elevation: 8,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-  },
-  bottomSheetBoxEmpty: {
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'android' ? 30 : 40,
-  },
-  sheetDragBar: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#CBD5E1',
-    alignSelf: 'center',
-    marginBottom: 8,
-  },
-  emptyNotifLottie: {
-    width: 96,
-    height: 96,
-  },
-  emptyNotifBox: {
-    alignItems: 'center',
-    gap: 3,
-    paddingVertical: 2,
-  },
-  emptyNotifTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-    textAlign: 'center',
-  },
-  emptyNotifSub: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#64748B',
-    textAlign: 'center',
-  },
-  notifListWrap: {
-    width: '100%',
-    gap: 8,
-    paddingTop: 2,
-  },
-  notifItemCard: {
-    width: '100%',
-    direction: 'ltr',
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  notifItemIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#FFF7ED',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  notifItemTextCol: {
-    flex: 1,
-    direction: 'ltr',
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  notifItemTopRow: {
-    direction: 'ltr',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    gap: 8,
-  },
-  notifItemTitle: {
-    flexShrink: 1,
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0F172A',
-    textAlign: 'right',
-  },
-  notifItemTime: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
-    textAlign: 'left',
-  },
-  notifItemBodyRow: {
-    width: '100%',
-    direction: 'ltr',
-    alignItems: 'flex-end',
-  },
-  notifItemBody: {
-    fontSize: 12.5,
-    color: '#475569',
-    textAlign: 'right',
-    lineHeight: 19,
-  },
-  clearNotifsBtn: {
-    alignSelf: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    marginTop: 2,
-  },
-  clearNotifsBtnText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#973c00',
   },
   cacheChip: {
     flexDirection: rtlFlexDirection,

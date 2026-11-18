@@ -24,6 +24,7 @@ import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
 import { API_BASE_URL } from '@/core/config/api.config';
 import { fetchModuleData } from '@/core/api-client/apiClient';
 import { WidgetErrorBoundary } from '@/core/error-boundary/WidgetErrorBoundary';
+import { notifyNotificationsListeners } from '@/features/notifications/api/notifications.api';
 import { PublicReportCard } from '../components/PublicReportCard';
 import {
   ReportTrackingModal,
@@ -310,6 +311,7 @@ export function ReportsScreen() {
       setMediaList([]);
       setCurrentView('list');
       setShowSuccessSheet(true);
+      notifyNotificationsListeners();
       // إعادة تحميل البلاغات المعتمدة فقط (البلاغ الجديد لا يظهر حتى يوافق عليه المشرف)
       await loadReports();
     } catch {

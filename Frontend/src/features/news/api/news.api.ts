@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '@/core/config/api.config';
 import { ApiResult, fetchModuleData } from '@/core/api-client/apiClient';
+import { notifyNotificationsListeners } from '@/features/notifications/api/notifications.api';
 import { NewsCardItem, NewsFeedPayload } from '../types/news.types';
 
 const EMPTY_FEED: NewsFeedPayload = {
@@ -43,6 +44,7 @@ export async function publishRealNewsArticle(payload: {
         error: json?.error?.message ?? 'تعذر نشر الخبر على الخادم.',
       };
     }
+    notifyNotificationsListeners();
     return { ok: true, data: json.data as NewsCardItem };
   } catch {
     return {

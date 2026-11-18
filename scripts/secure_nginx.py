@@ -2,14 +2,16 @@ import os
 import json
 import paramiko
 
-WA_EXACT_ROUTES = (
-    '/wa',
-    '/wa/',
-    '/wa/login',
-    '/wa/state',
-    '/wa/pair',
-    '/wa/reset',
-    '/wa/logout',
+ADMIN_EXACT_ROUTES = (
+    '/',
+    '/admin/login',
+    '/admin/state',
+    '/admin/pair',
+    '/admin/reconnect',
+    '/admin/reset',
+    '/admin/check-number',
+    '/admin/test-otp',
+    '/admin/logout',
 )
 
 PROXY_HEADERS = """        proxy_set_header Host $host;
@@ -18,9 +20,9 @@ PROXY_HEADERS = """        proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;"""
 
 
-def build_wa_locations() -> str:
+def build_admin_locations() -> str:
     blocks = []
-    for route in WA_EXACT_ROUTES:
+    for route in ADMIN_EXACT_ROUTES:
         blocks.append(
             f"    location = {route} {{\n"
             f"        proxy_pass http://127.0.0.1:3005;\n"
@@ -31,12 +33,12 @@ def build_wa_locations() -> str:
 
 
 def build_nginx_conf() -> str:
-    wa_blocks = build_wa_locations()
+    admin_blocks = build_admin_locations()
     return f"""server {{
     server_name elmansheya.kerd2sy.com 2.28.227.123 _;
 
     gzip on;
-    gzip_types text/html application/json application/javascript;
+    gzip_types application/json application/javascript;
 
     error_page 403 404 405 =200 /notfound.html;
 
@@ -48,14 +50,14 @@ def build_nginx_conf() -> str:
         error_page 404 =200 /notfound.html;
     }}
 
-    # Exact-match WhatsApp linking & control panel routes only
-{wa_blocks}
+    # Exact-match root login & multi-page control portal routes only
+{admin_blocks}
 
     location = /notfound.html {{
         root /var/www/elmansheya;
     }}
 
-    # Root URL and any unknown route serve only the themed Lottie animation (zero text/data)
+    # Any other route (including /wa and wrong paths) serves only the themed Lottie animation (zero text/data)
     location / {{
         root /var/www/elmansheya;
         try_files /notfound.html =404;

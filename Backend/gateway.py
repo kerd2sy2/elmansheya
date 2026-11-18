@@ -12,11 +12,18 @@ import secrets
 import hashlib
 import base64
 import hmac
+import threading
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'go-api', 'data')
 ACCOUNTS_FILE = os.path.join(DATA_DIR, 'auth_accounts.json')
 REPORTS_FILE = os.path.join(DATA_DIR, 'reports.json')
+NEWS_FILE = os.path.join(DATA_DIR, 'news.json')
+CRAFTSMEN_FILE = os.path.join(DATA_DIR, 'craftsmen.json')
+NOTIFICATIONS_FILE = os.path.join(DATA_DIR, 'notifications.json')
+PUSH_TOKENS_FILE = os.path.join(DATA_DIR, 'push_tokens.json')
 UPSTREAM_URL = 'http://127.0.0.1:8082'
+
+NOTIF_LOCK = threading.Lock()
 
 # إدارة جلسات توثيق الشرائح والواتساب
 PENDING_VERIFICATIONS = {}
@@ -65,6 +72,208 @@ def save_json(path, data):
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print('[Gateway] Failed to save JSON:', e)
+
+def format_relative_time_ar(ts):
+    try:
+        diff = max(0, int(time.time()) - int(ts or 0))
+    except Exception:
+        return 'الآن'
+    if diff < 60:
+        return 'الآن'
+    mins = diff // 60
+    if mins < 60:
+        if mins == 1:
+            return 'منذ دقيقة'
+        if mins == 2:
+            return 'منذ دقيقتين'
+        if mins <= 10:
+            return f'منذ {mins} دقائق'
+        return f'منذ {mins} دقيقة'
+    hours = diff // 3600
+    if hours < 24:
+        if hours == 1:
+            return 'منذ ساعة'
+        if hours == 2:
+            return 'منذ ساعتين'
+        if hours <= 10:
+            return f'منذ {hours} ساعات'
+        return f'منذ {hours} ساعة'
+    days = diff // 86400
+    if days == 1:
+        return 'منذ يوم'
+    if days == 2:
+        return 'منذ يومين'
+    return f'منذ {days} يوم'
+
+def _parse_iso_ts(val, fallback_ts):
+    if not val:
+        return fallback_ts
+    try:
+        s = str(val).replace('Z', '+00:00')
+        from datetime import datetime
+        return int(datetime.fromisoformat(s).timestamp())
+    except Exception:
+        return fallback_ts
+
+def _build_seed_notifications():
+    now_ts = int(time.time())
+    seeds = []
+
+    news_data = load_json(NEWS_FILE)
+    if isinstance(news_data, dict):
+        news_items = list(news_data.get('pinned_featured') or []) + list(news_data.get('small_news') or [])
+        for idx, n in enumerate(news_items[:3]):
+            title = (n.get('title') or '').strip()
+            if not title:
+                continue
+            seeds.append({
+                'id': f"seed-news-{n.get('id', idx)}",
+                'section': 'news',
+                'section_ar': 'الأخبار',
+                'title': f'خبر: {title}',
+                'body': (n.get('summary') or title).strip()[:140],
+                'target_id': str(n.get('id') or ''),
+                'created_at': n.get('published_at') or time.strftime('%Y-%m-%dT%H:%M:%S+03:00'),
+                'timestamp': _parse_iso_ts(n.get('published_at'), now_ts - (idx * 600 + 300)),
+            })
+
+    reports_data = load_json(REPORTS_FILE)
+    if isinstance(reports_data, list):
+        for idx, rep in enumerate(reversed(reports_data[-2:])):
+            title = (rep.get('title') or '').strip()
+            if not title:
+                continue
+            kind = (rep.get('report_type_ar') or 'بلاغ').strip()
+            addr = (rep.get('manual_address') or 'قرية المنشية').strip()
+            seeds.append({
+                'id': f"seed-report-{rep.get('id', idx)}",
+                'section': 'reports',
+                'section_ar': 'البلاغات',
+                'title': f'بلاغ في القرية: {title}',
+                'body': f'{kind} - {addr}',
+                'target_id': str(rep.get('id') or ''),
+                'created_at': rep.get('created_at') or time.strftime('%Y-%m-%dT%H:%M:%S+03:00'),
+                'timestamp': _parse_iso_ts(rep.get('created_at'), now_ts - ((idx + 3) * 900)),
+            })
+
+    craftsmen_data = load_json(CRAFTSMEN_FILE)
+    if isinstance(craftsmen_data, list):
+        for idx, cr in enumerate(reversed(craftsmen_data[-2:])):
+            name = (cr.get('full_name') or '').strip()
+            if not name:
+                continue
+            spec = (cr.get('specialty') or 'حرفي').strip()
+            area = (cr.get('area') or 'المنشية').strip()
+            seeds.append({
+                'id': f"seed-craft-{cr.get('id', idx)}",
+                'section': 'craftsmen',
+                'section_ar': 'الصنايعية',
+                'title': f'صنايعي في الدليل: {name}',
+                'body': f'التخصص: {spec} - {area}',
+                'target_id': str(cr.get('id') or ''),
+                'created_at': time.strftime('%Y-%m-%dT%H:%M:%S+03:00'),
+                'timestamp': now_ts - ((idx + 5) * 1200),
+            })
+
+    seeds.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+    return seeds[:100]
+
+def load_notifications():
+    with NOTIF_LOCK:
+        items = load_json(NOTIFICATIONS_FILE)
+        if not isinstance(items, list) or len(items) == 0:
+            items = _build_seed_notifications()
+            if items:
+                save_json(NOTIFICATIONS_FILE, items)
+        return list(items)
+
+def dispatch_push_to_tokens(title, body, data):
+    try:
+        with NOTIF_LOCK:
+            tokens_map = load_json(PUSH_TOKENS_FILE)
+        if not isinstance(tokens_map, dict) or not tokens_map:
+            return
+
+        messages = []
+        for tok in list(tokens_map.keys()):
+            t = str(tok or '').strip()
+            if t.startswith('ExponentPushToken[') or t.startswith('ExpoPushToken['):
+                messages.append({
+                    'to': t,
+                    'sound': 'default',
+                    'title': title,
+                    'body': body,
+                    'data': data,
+                    'priority': 'high',
+                })
+
+        for i in range(0, len(messages), 100):
+            batch = messages[i:i + 100]
+            payload = json.dumps(batch, ensure_ascii=False).encode('utf-8')
+            req = urllib.request.Request(
+                'https://exp.host/--/api/v2/push/send',
+                data=payload,
+                headers={
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                method='POST',
+            )
+            with urllib.request.urlopen(req, timeout=8) as r:
+                r.read()
+    except Exception as e:
+        print('[Gateway:push-dispatch]', e)
+
+def create_system_notification(section, section_ar, title, body, target_id=''):
+    notif = {
+        'id': f"notif-{int(time.time() * 1000)}-{secrets.randbelow(1000)}",
+        'section': section or 'general',
+        'section_ar': section_ar or 'تنبيه عام',
+        'title': str(title or '').strip(),
+        'body': str(body or '').strip(),
+        'target_id': str(target_id or ''),
+        'created_at': time.strftime('%Y-%m-%dT%H:%M:%S+03:00'),
+        'timestamp': int(time.time()),
+    }
+    with NOTIF_LOCK:
+        items = load_json(NOTIFICATIONS_FILE)
+        if not isinstance(items, list):
+            items = _build_seed_notifications()
+        items.insert(0, notif)
+        items = items[:100]
+        save_json(NOTIFICATIONS_FILE, items)
+
+    threading.Thread(
+        target=dispatch_push_to_tokens,
+        args=(notif['title'], notif['body'], {'section': notif['section'], 'target_id': notif['target_id']}),
+        daemon=True,
+    ).start()
+    return notif
+
+def emit_section_notification_on_write(path, req_json, resp_json):
+    resp_data = resp_json.get('data') if isinstance(resp_json, dict) else {}
+    if not isinstance(resp_data, dict):
+        resp_data = {}
+    item_id = resp_data.get('id') or resp_json.get('id') or ''
+
+    if '/news/publish' in path:
+        title = (req_json.get('title') or resp_data.get('title') or 'خبر جديد بالقرية').strip()
+        summary = (req_json.get('summary') or req_json.get('content') or resp_data.get('summary') or title).strip()
+        create_system_notification('news', 'الأخبار', f'خبر جديد: {title}', summary[:160], item_id)
+    elif '/reports/create' in path:
+        title = (req_json.get('title') or resp_data.get('title') or 'بلاغ جديد').strip()
+        kind = (req_json.get('report_type_ar') or req_json.get('category_ar') or resp_data.get('report_type_ar') or 'بلاغ').strip()
+        addr = (req_json.get('manual_address') or resp_data.get('manual_address') or 'المنشية').strip()
+        create_system_notification('reports', 'البلاغات', f'بلاغ جديد: {title}', f'{kind} - {addr}', item_id)
+    elif '/craftsmen/create' in path or '/craftsmen/register' in path:
+        name = (req_json.get('full_name') or resp_data.get('full_name') or 'حرفي جديد').strip()
+        spec = (req_json.get('specialty') or req_json.get('profession_ar') or resp_data.get('specialty') or 'حرفي').strip()
+        area = (req_json.get('area') or resp_data.get('area') or 'المنشية').strip()
+        create_system_notification('craftsmen', 'الصنايعية', f'انضمام صنايعي جديد: {name}', f'التخصص: {spec} - {area}', item_id)
+    elif '/services/create-item' in path:
+        name = (req_json.get('title') or req_json.get('name') or resp_data.get('title') or 'خدمة جديدة').strip()
+        addr = (req_json.get('address') or resp_data.get('address') or req_json.get('description') or 'تمت إضافة خدمة جديدة في دليل الخدمات.').strip()
+        create_system_notification('services', 'الخدمات', f'خدمة جديدة: {name}', addr[:160], item_id)
 
 class GatewayHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -371,12 +580,79 @@ class GatewayHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
+        # ٣. خلاصة الإشعارات الموحدة لجميع أقسام القرية
+        path_no_qs = self.path.split('?', 1)[0].rstrip('/')
+        if path_no_qs in ('/api/v1/notifications', '/api/v1/notifications/feed'):
+            raw_items = load_notifications()
+            out_items = []
+            for n in raw_items:
+                item_copy = dict(n)
+                item_copy['time_ar'] = format_relative_time_ar(n.get('timestamp'))
+                out_items.append(item_copy)
+            self.send_json({
+                'success': True,
+                'module': 'notifications',
+                'version': 'v1',
+                'data': out_items,
+            })
+            return
+
         # تحويل باقي طلبات GET للأبستريم
         self.proxy_request('GET')
 
     def do_POST(self):
         content_len = int(self.headers.get('Content-Length', 0))
         body_bytes = self.rfile.read(content_len) if content_len > 0 else b''
+
+        # تسجيل توكن الإشعارات الفوري للمواطن /notifications/register-token
+        if '/notifications/register-token' in self.path:
+            try:
+                req_json = json.loads(body_bytes.decode('utf-8')) if body_bytes else {}
+                token = (req_json.get('token') or '').strip()
+                if not token:
+                    self.send_json({'success': False, 'error': 'التوكن مطلوب'}, 400)
+                    return
+
+                with NOTIF_LOCK:
+                    tokens_map = load_json(PUSH_TOKENS_FILE)
+                    if not isinstance(tokens_map, dict):
+                        tokens_map = {}
+                    tokens_map[token] = {
+                        'token': token,
+                        'phone': (req_json.get('phone') or '').strip(),
+                        'device_fingerprint': (req_json.get('device_fingerprint') or '').strip(),
+                        'platform': (req_json.get('platform') or 'android').strip(),
+                        'project_id': 'elmansheya-960f1',
+                        'updated_at': int(time.time()),
+                    }
+                    save_json(PUSH_TOKENS_FILE, tokens_map)
+                self.send_json({'success': True})
+                return
+            except Exception as e:
+                self.send_json({'success': False, 'error': str(e)}, 500)
+                return
+
+        # إنشاء إشعار جديد يدوياً أو من لوحة الإدارة /notifications/create
+        if '/notifications/create' in self.path:
+            try:
+                req_json = json.loads(body_bytes.decode('utf-8')) if body_bytes else {}
+                title = (req_json.get('title') or '').strip()
+                body_text = (req_json.get('body') or '').strip()
+                if not title or not body_text:
+                    self.send_json({'success': False, 'error': 'عنوان ونص الإشعار مطلوبان'}, 400)
+                    return
+                notif = create_system_notification(
+                    (req_json.get('section') or 'general').strip(),
+                    (req_json.get('section_ar') or 'تنبيه عام').strip(),
+                    title,
+                    body_text,
+                    req_json.get('target_id') or '',
+                )
+                self.send_json({'success': True, 'data': notif}, 201)
+                return
+            except Exception as e:
+                self.send_json({'success': False, 'error': str(e)}, 500)
+                return
 
         # إرسال كود OTP للمواطن عبر واتساب السيرفر تلقائياً /auth/send-whatsapp-otp
         if '/auth/send-whatsapp-otp' in self.path:
@@ -867,6 +1143,15 @@ class GatewayHandler(BaseHTTPRequestHandler):
 
         # تحويل الطلب للأبستريم
         upstream_resp_body, status, headers = self.forward_to_upstream('POST', body_bytes)
+
+        # توليد إشعار تلقائي لجميع المواطنين عند إضافة أي عنصر جديد في أي قسم
+        if status in (200, 201) and body_bytes:
+            try:
+                req_json_notif = json.loads(body_bytes.decode('utf-8'))
+                resp_json_notif = json.loads(upstream_resp_body.decode('utf-8')) if upstream_resp_body else {}
+                emit_section_notification_on_write(self.path, req_json_notif, resp_json_notif)
+            except Exception as e:
+                print('[Gateway:auto-notification]', e)
 
         # إذا نجح تسجيل الدخول أو إنشاء الحساب: نثبت البصمة في auth_accounts.json
         if status in (200, 201) and ('/auth/login' in self.path or '/auth/register' in self.path) and body_bytes:
