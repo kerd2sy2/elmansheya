@@ -58,7 +58,7 @@ interface InlineDriveVideoPlayerProps {
 /**
  * المشغل الأصيل فائق السرعة عبر مكتبة expo-video (ExoPlayer للأندرويد)
  * بنمط Instagram & Twitter: تشغيل ذكي عند التمرير، كتم صوت افتراضي مع زر كتم/تشغيل،
- * زر تكبير شاشة كاملة، وبدون شريط تقديم أو تأخير داخل بطاقة الرئيسية.
+ * وبدون شريط تقديم أو تأخير، مع التكيف التلقائي مع أبعاد الفيديو الطبيعية بدون أي اقتصاص.
  */
 function NativeExoPlayerView({
   streamUrl,
@@ -67,7 +67,7 @@ function NativeExoPlayerView({
   autoPlayAllowed,
 }: {
   streamUrl: string;
-  height: number;
+  height?: number;
   isActive: boolean;
   autoPlayAllowed: boolean;
 }) {
@@ -78,6 +78,8 @@ function NativeExoPlayerView({
   const [isMuted, setIsMuted] = useState<boolean>(true);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [manuallyPaused, setManuallyPaused] = useState<boolean>(false);
+  // تحديد نسبة العرض إلى الارتفاع الطبيعية للفيديو تلقائياً لعرضه كاملاً دون أي اقتصاص
+  const [videoAspectRatio, setVideoAspectRatio] = useState<number>(16 / 9);
 
   const player = useVideoPlayer(streamUrl, (p: any) => {
     p.loop = true;
@@ -92,9 +94,29 @@ function NativeExoPlayerView({
     const subMuted = player.addListener?.('mutedChange', (ev: any) => {
       setIsMuted(ev.isMuted);
     });
+    const subTrack = player.addListener?.('videoTrackChange', (ev: any) => {
+      const size = ev.videoTrack?.size;
+      if (size?.width && size?.height && size.height > 0) {
+        const ratio = size.width / size.height;
+        const clamped = Math.max(0.68, Math.min(ratio, 2.2));
+        setVideoAspectRatio(clamped);
+      }
+    });
+    const subSource = player.addListener?.('sourceLoad', (ev: any) => {
+      const track = ev.availableVideoTracks?.[0];
+      const size = track?.size;
+      if (size?.width && size?.height && size.height > 0) {
+        const ratio = size.width / size.height;
+        const clamped = Math.max(0.68, Math.min(ratio, 2.2));
+        setVideoAspectRatio(clamped);
+      }
+    });
+
     return () => {
       subPlaying?.remove();
       subMuted?.remove();
+      subTrack?.remove();
+      subSource?.remove();
     };
   }, [player]);
 
@@ -142,17 +164,12 @@ function NativeExoPlayerView({
     player.muted = !player.muted;
   };
 
-  // تكبير الفيديو للحجم الكامل
-  const handleFullscreen = (e: any) => {
-    e?.stopPropagation?.();
-    try {
-      videoViewRef.current?.enterFullscreen();
-    } catch {}
-  };
-
   return (
     <Pressable
-      style={[styles.container, { height }]}
+      style={[
+        styles.container,
+        height ? { height } : { width: '100%', aspectRatio: videoAspectRatio },
+      ]}
       onPress={handleTogglePlayPause}
       accessibilityLabel="تشغيل أو إيقاف الفيديو">
       <VideoView
@@ -160,7 +177,7 @@ function NativeExoPlayerView({
         style={styles.nativeVideo}
         player={player}
         nativeControls={false}
-        allowsFullscreen={true}
+        allowsFullscreen={false}
         contentFit="contain"
       />
 
@@ -178,7 +195,7 @@ function NativeExoPlayerView({
         </View>
       ) : null}
 
-      {/* أزرار التحكم الأنيقة أسفل الفيديو: كتم/فتح الصوت + زر تكبير الشاشة بالحجم الطبيعي */}
+      {/* أزرار التحكم الأنيقة أسفل الفيديو: كتم/فتح الصوت فقط */}
       <View style={styles.controlsBottomRow} pointerEvents="box-none">
         <Pressable
           style={styles.circleControlBtn}
@@ -190,14 +207,6 @@ function NativeExoPlayerView({
             size={18}
             color="#FFFFFF"
           />
-        </Pressable>
-
-        <Pressable
-          style={styles.circleControlBtn}
-          onPress={handleFullscreen}
-          hitSlop={8}
-          accessibilityLabel="تكبير بالحجم الطبيعي الكامل">
-          <Ionicons name="expand" size={17} color="#FFFFFF" />
         </Pressable>
       </View>
     </Pressable>
@@ -213,7 +222,7 @@ function EmbeddedWebViewPlayer({
   isActive,
 }: {
   previewUrl: string;
-  height: number;
+  height?: number;
   isActive: boolean;
 }) {
   const [loading, setLoading] = useState(true);
@@ -222,9 +231,11 @@ function EmbeddedWebViewPlayer({
     ? `${previewUrl}&autoplay=1`
     : `${previewUrl}?autoplay=1`;
 
+  const containerDimension = height ? { height } : { width: '100%' as const, aspectRatio: 16 / 9 };
+
   if (!isActive) {
     return (
-      <View style={[styles.container, styles.darkPoster, { height }]}>
+      <View style={[styles.container, styles.darkPoster, containerDimension]}>
         <Ionicons name="film-outline" size={42} color="#334155" />
         <View style={styles.centerPlayOverlay} pointerEvents="none">
           <View style={styles.centerPlayCircle}>
@@ -236,9 +247,9 @@ function EmbeddedWebViewPlayer({
   }
 
   return (
-    <View style={[styles.container, { height }]}>
+    <View style={[styles.container, containerDimension]}>
       {loading ? (
-        <View style={[styles.loadingBox, { height }]}>
+        <View style={[styles.loadingBox, containerDimension]}>
           <ActivityIndicator size="small" color="#973c00" />
           <Text style={styles.loadingText}>جاري تجهيز مشغل الفيديو...</Text>
         </View>
@@ -246,7 +257,7 @@ function EmbeddedWebViewPlayer({
       <WebViewComponent
         source={{ uri: targetUrl }}
         style={[styles.webView, loading && { opacity: 0 }]}
-        allowsFullscreenVideo={true}
+        allowsFullscreenVideo={false}
         mediaPlaybackRequiresUserAction={false}
         javaScriptEnabled={true}
         domStorageEnabled={true}
@@ -262,7 +273,7 @@ function EmbeddedWebViewPlayer({
 export function InlineDriveVideoPlayer({
   videoUrl,
   coverImageUrl,
-  height = 240,
+  height,
   isActive = false,
 }: InlineDriveVideoPlayerProps) {
   const [autoPlayAllowed, setAutoPlayAllowed] = useState<boolean>(true);
@@ -271,6 +282,8 @@ export function InlineDriveVideoPlayer({
   const fileId = extractGoogleDriveFileId(videoUrl);
   const directStreamUrl = getDirectVideoUrl(videoUrl);
   const previewUrl = getGoogleDrivePreviewUrl(videoUrl);
+
+  const containerDimension = height ? { height } : { width: '100%' as const, aspectRatio: 16 / 9 };
 
   useEffect(() => {
     let isMounted = true;
@@ -336,7 +349,7 @@ export function InlineDriveVideoPlayer({
   if (!userWantsToPlay) {
     return (
       <Pressable
-        style={[styles.container, { height }]}
+        style={[styles.container, containerDimension]}
         onPress={() => setUserWantsToPlay(true)}
         accessibilityLabel="تشغيل الفيديو المدمج">
         {coverImageUrl ? (
@@ -371,7 +384,7 @@ export function InlineDriveVideoPlayer({
 
   return (
     <Pressable
-      style={[styles.container, styles.fallbackContainer, { height }]}
+      style={[styles.container, styles.fallbackContainer, containerDimension]}
       onPress={handleFallbackPlay}>
       {coverImageUrl ? (
         <Image

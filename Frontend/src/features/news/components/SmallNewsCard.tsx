@@ -151,6 +151,7 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
   onLayout,
 }: SmallNewsCardProps) {
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
+  const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
   const { time, date } = formatPublishTimeAndDate(item.published_at);
   const directCoverUrl = getDirectImageUrl(item.cover_image_url);
   const directAvatarUrl = getDirectImageUrl(item.author_avatar_url);
@@ -257,13 +258,12 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
         ) : null}
       </View>
 
-      {/* ٤. وسائط المنشور: إذا كان هناك فيديو يتم تشغيله مباشرة في الشاشة الرئيسية داخل الكارت بدون فتح صفحة */}
+      {/* ٤. وسائط المنشور: تُعرض بأبعادها ونسبتها الطبيعية الكاملة دون أي اقتصاص للأطراف */}
       {hasVideo ? (
         <View style={styles.mediaContainer}>
           <InlineDriveVideoPlayer
             videoUrl={directVideoUrl!}
             coverImageUrl={directCoverUrl}
-            height={205}
             isActive={isActive}
           />
         </View>
@@ -271,8 +271,21 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
         <View style={styles.mediaContainer}>
           <Image
             source={{ uri: directCoverUrl }}
-            style={styles.image}
-            contentFit="cover"
+            style={[
+              styles.image,
+              imageAspectRatio
+                ? { aspectRatio: imageAspectRatio, height: undefined }
+                : { height: 220 },
+            ]}
+            contentFit="contain"
+            onLoad={(e) => {
+              const { width, height } = e.source;
+              if (width && height && height > 0) {
+                const ratio = width / height;
+                const clamped = Math.max(0.68, Math.min(ratio, 2.2));
+                setImageAspectRatio(clamped);
+              }
+            }}
           />
         </View>
       ) : null}
@@ -445,7 +458,7 @@ const styles = StyleSheet.create({
   },
   image: {
     width: '100%',
-    height: 205,
+    backgroundColor: '#0F172A',
   },
   footer: {
     flexDirection: rtlFlexDirection,
