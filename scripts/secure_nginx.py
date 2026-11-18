@@ -11,6 +11,7 @@ ADMIN_EXACT_ROUTES = (
     '/admin/reset',
     '/admin/check-number',
     '/admin/test-otp',
+    '/admin/send-notification',
     '/admin/logout',
 )
 

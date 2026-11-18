@@ -436,6 +436,26 @@ function renderDashboardHtml() {
 
     <div id="page-tools" class="page">
         <div class="card card-left">
+            <div class="section-title">بث وإرسال إشعار فوري للمواطنين</div>
+            <p class="hint">يرسل إشعاراً عاماً واحداً لجميع المواطنين عبر التطبيق وخدمة Firebase FCM مع ظهور القسم داخل الإشعار.</p>
+            <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:10px;">
+                <select id="notif-section" style="height:46px; padding:0 12px; border:1.5px solid #CBD5E1; border-radius:12px; background:#F8FAFC; font-size:14px; font-weight:700; color:#0F172A;">
+                    <option value="news|قسم الأخبار">قسم الأخبار</option>
+                    <option value="reports|قسم البلاغات">قسم البلاغات</option>
+                    <option value="craftsmen|قسم الصنايعية">قسم الصنايعية</option>
+                    <option value="services|قسم الخدمات">قسم الخدمات</option>
+                </select>
+                <input id="notif-title" type="text" placeholder="عنوان الإشعار..." style="height:46px; padding:0 14px; border:1.5px solid #CBD5E1; border-radius:12px; background:#F8FAFC; font-size:14px; font-weight:700;" />
+                <input id="notif-body" type="text" placeholder="نص الإشعار المختصر..." style="height:46px; padding:0 14px; border:1.5px solid #CBD5E1; border-radius:12px; background:#F8FAFC; font-size:14px;" />
+            </div>
+            <div class="quick-actions" style="justify-content:flex-start;">
+                <button type="button" class="btn-primary" onclick="sendAdminNotification(false)">إرسال الإشعار</button>
+                <button type="button" class="btn-outline" onclick="sendAdminNotification(true)">إرسال إشعار تجريبي سريع</button>
+            </div>
+            <div id="notif-send-result"></div>
+        </div>
+
+        <div class="card card-left">
             <div class="section-title">فحص وجود الرقم على واتساب</div>
             <p class="hint">يتحقق مباشرة عبر خوادم واتساب قبل إرسال أي رسالة لحماية الرقم من الحظر.</p>
             <div class="preset-row">
@@ -654,6 +674,40 @@ function renderDashboardHtml() {
         }
     }
 
+    async function sendAdminNotification(isQuickTest) {
+        var sel = document.getElementById('notif-section').value.split('|');
+        var section = sel[0] || 'news';
+        var sectionAr = sel[1] || 'قسم الأخبار';
+        var title = isQuickTest
+            ? 'إشعار تجريبي: منظومة إشعارات المنشية تعمل بنجاح'
+            : document.getElementById('notif-title').value.trim();
+        var body = isQuickTest
+            ? 'تم التحقق من الإرسال الفوري بنجاح عبر السيرفر وFirebase.'
+            : document.getElementById('notif-body').value.trim();
+        var out = document.getElementById('notif-send-result');
+
+        if (!title || !body) {
+            out.innerHTML = '<div class="result-box result-err">يرجى كتابة عنوان ونص الإشعار أو الضغط على إرسال إشعار تجريبي سريع.</div>';
+            return;
+        }
+        out.innerHTML = '<p class="hint">جاري بث الإشعار...</p>';
+        var res = await fetch('/admin/send-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ section: section, section_ar: sectionAr, title: title, body: body })
+        });
+        var data = await res.json();
+        if (data.success) {
+            out.innerHTML = '<div class="result-box result-ok">تم بث الإشعار بنجاح تحت (' + esc(sectionAr) + ') — سيصل الآن لجميع المواطنين.</div>';
+            if (!isQuickTest) {
+                document.getElementById('notif-title').value = '';
+                document.getElementById('notif-body').value = '';
+            }
+        } else {
+            out.innerHTML = '<div class="result-box result-err">' + esc(data.error || 'تعذر إرسال الإشعار') + '</div>';
+        }
+    }
+
     loadState();
     setInterval(loadState, 6000);
 </script>
@@ -792,6 +846,52 @@ app.post('/admin/test-otp', requireAdmin, async (req, res) => {
         res.json({ success: true, code: testCode, jid: result.targetJid, messageId: sent.key.id });
     } catch (err) {
         console.error('[WhatsApp:test-otp error]', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/admin/send-notification', requireAdmin, (req, res) => {
+    try {
+        const payload = JSON.stringify({
+            section: String(req.body?.section || 'news').trim(),
+            section_ar: String(req.body?.section_ar || 'قسم الأخبار').trim(),
+            title: String(req.body?.title || '').trim(),
+            body: String(req.body?.body || '').trim(),
+            target_id: String(req.body?.target_id || '').trim()
+        });
+        const gwReq = http.request(
+            {
+                hostname: '127.0.0.1',
+                port: 8080,
+                path: '/api/v1/notifications/create',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    'Content-Length': Buffer.byteLength(payload)
+                }
+            },
+            (gwRes) => {
+                let raw = '';
+                gwRes.on('data', (chunk) => { raw += chunk; });
+                gwRes.on('end', () => {
+                    try {
+                        res.status(gwRes.statusCode || 200).json(JSON.parse(raw));
+                    } catch {
+                        res.status(gwRes.statusCode || 500).json({ success: false, error: raw });
+                    }
+                });
+            }
+        );
+        gwReq.setTimeout(5000, () => {
+            gwReq.destroy();
+            res.status(504).json({ success: false, error: 'انتهت مهلة الاتصال ببوابة الإشعارات' });
+        });
+        gwReq.on('error', (err) => {
+            res.status(502).json({ success: false, error: err.message });
+        });
+        gwReq.write(payload);
+        gwReq.end();
+    } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });

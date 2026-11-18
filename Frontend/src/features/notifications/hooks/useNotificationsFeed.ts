@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Vibration } from 'react-native';
 import { getSecureItem, setSecureItem } from '@/core/auth-storage/sessionStorage';
 import { getCompositeDeviceFingerprint } from '@/core/security/deviceFingerprint';
 import {
@@ -12,15 +12,18 @@ import {
 import { VillageNotificationItem } from '../types/notifications.types';
 
 const NOTIF_STATE_STORAGE_KEY = 'elmansheya_notif_state_v2';
-const POLL_INTERVAL_MS = 15_000;
+const POLL_INTERVAL_MS = 5_000;
+const FRESH_BANNER_WINDOW_SEC = 180;
 
 interface StoredNotifState {
   lastClearedTimestamp: number;
+  lastBannerTimestamp: number;
   dismissedIds: string[];
 }
 
 const DEFAULT_STORED_STATE: StoredNotifState = {
   lastClearedTimestamp: 0,
+  lastBannerTimestamp: 0,
   dismissedIds: [],
 };
 
@@ -56,13 +59,20 @@ export function useNotificationsFeed(userPhone?: string) {
     (item: VillageNotificationItem) => {
       dismissBanner();
       setLatestBannerNotification(item);
+      try {
+        if (Platform.OS !== 'web') {
+          Vibration.vibrate(250);
+        }
+      } catch {
+        // ignore vibration failure
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
         () => {}
       );
       bannerTimerRef.current = setTimeout(() => {
         setLatestBannerNotification(null);
         bannerTimerRef.current = null;
-      }, 5000);
+      }, 7000);
     },
     [dismissBanner]
   );
@@ -78,40 +88,71 @@ export function useNotificationsFeed(userPhone?: string) {
       (acc, cur) => Math.max(acc, Number(cur.timestamp || 0)),
       0
     );
+    const current = stateRef.current;
+    const dismissedSet = new Set(current.dismissedIds);
+    const nowSec = Math.floor(Date.now() / 1000);
 
     if (!initialLoadedRef.current) {
       initialLoadedRef.current = true;
       highestSeenTimestampRef.current = Math.max(
         maxTs,
-        stateRef.current.lastClearedTimestamp
+        current.lastClearedTimestamp
       );
+      const newestFresh = items.find((it) => {
+        const ts = Number(it.timestamp || 0);
+        return (
+          ts > current.lastClearedTimestamp &&
+          ts > (current.lastBannerTimestamp || 0) &&
+          nowSec - ts <= FRESH_BANNER_WINDOW_SEC &&
+          !dismissedSet.has(it.id)
+        );
+      });
+      if (newestFresh) {
+        const nextBannerTs = Math.max(
+          current.lastBannerTimestamp || 0,
+          Number(newestFresh.timestamp || 0)
+        );
+        persistNotifState({
+          ...current,
+          lastBannerTimestamp: nextBannerTs,
+        });
+        triggerBanner(newestFresh);
+      }
       return;
     }
 
     if (maxTs > highestSeenTimestampRef.current) {
-      const { lastClearedTimestamp, dismissedIds } = stateRef.current;
-      const dismissedSet = new Set(dismissedIds);
-      const newest = items.find(
-        (it) =>
-          Number(it.timestamp || 0) > highestSeenTimestampRef.current &&
-          Number(it.timestamp || 0) > lastClearedTimestamp &&
+      const newest = items.find((it) => {
+        const ts = Number(it.timestamp || 0);
+        return (
+          ts > highestSeenTimestampRef.current &&
+          ts > current.lastClearedTimestamp &&
           !dismissedSet.has(it.id)
-      );
+        );
+      });
       highestSeenTimestampRef.current = maxTs;
       if (newest) {
+        persistNotifState({
+          ...current,
+          lastBannerTimestamp: Math.max(
+            current.lastBannerTimestamp || 0,
+            Number(newest.timestamp || 0)
+          ),
+        });
         triggerBanner(newest);
       }
     }
-  }, [triggerBanner]);
+  }, [persistNotifState, triggerBanner]);
 
   useEffect(() => {
     let active = true;
     (async () => {
-      const saved = await getSecureItem<StoredNotifState>(NOTIF_STATE_STORAGE_KEY);
+      const saved = await getSecureItem<Partial<StoredNotifState>>(NOTIF_STATE_STORAGE_KEY);
       if (!active) return;
       if (saved && typeof saved === 'object') {
         const cleanSaved: StoredNotifState = {
           lastClearedTimestamp: Number(saved.lastClearedTimestamp || 0),
+          lastBannerTimestamp: Number(saved.lastBannerTimestamp || 0),
           dismissedIds: Array.isArray(saved.dismissedIds)
             ? saved.dismissedIds.slice(-30)
             : [],
@@ -182,18 +223,18 @@ export function useNotificationsFeed(userPhone?: string) {
 
   const dismissNotification = useCallback(
     async (id: string) => {
-      const { lastClearedTimestamp, dismissedIds } = stateRef.current;
-      if (dismissedIds.includes(id)) return;
+      const current = stateRef.current;
+      if (current.dismissedIds.includes(id)) return;
       const validIds = new Set(
         allNotifsRef.current
-          .filter((it) => Number(it.timestamp || 0) > lastClearedTimestamp)
+          .filter((it) => Number(it.timestamp || 0) > current.lastClearedTimestamp)
           .map((it) => it.id)
       );
-      const nextDismissed = [...dismissedIds, id]
+      const nextDismissed = [...current.dismissedIds, id]
         .filter((itemId) => itemId === id || validIds.has(itemId))
         .slice(-30);
       await persistNotifState({
-        lastClearedTimestamp,
+        ...current,
         dismissedIds: nextDismissed,
       });
     },
@@ -201,17 +242,19 @@ export function useNotificationsFeed(userPhone?: string) {
   );
 
   const clearAllNotifications = useCallback(async () => {
+    const current = stateRef.current;
     const maxItemTs = allNotifsRef.current.reduce(
       (acc, cur) => Math.max(acc, Number(cur.timestamp || 0)),
       0
     );
     const nextClearedTs = Math.max(
-      stateRef.current.lastClearedTimestamp,
+      current.lastClearedTimestamp,
       maxItemTs,
       Math.floor(Date.now() / 1000)
     );
     await persistNotifState({
       lastClearedTimestamp: nextClearedTs,
+      lastBannerTimestamp: Math.max(current.lastBannerTimestamp || 0, nextClearedTs),
       dismissedIds: [],
     });
   }, [persistNotifState]);

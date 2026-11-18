@@ -13,6 +13,8 @@ import hashlib
 import base64
 import hmac
 import threading
+import subprocess
+import tempfile
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'go-api', 'data')
 ACCOUNTS_FILE = os.path.join(DATA_DIR, 'auth_accounts.json')
@@ -21,9 +23,11 @@ NEWS_FILE = os.path.join(DATA_DIR, 'news.json')
 CRAFTSMEN_FILE = os.path.join(DATA_DIR, 'craftsmen.json')
 NOTIFICATIONS_FILE = os.path.join(DATA_DIR, 'notifications.json')
 PUSH_TOKENS_FILE = os.path.join(DATA_DIR, 'push_tokens.json')
+FIREBASE_SA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'firebase-service-account.json')
 UPSTREAM_URL = 'http://127.0.0.1:8082'
 
 NOTIF_LOCK = threading.Lock()
+_FCM_TOKEN_CACHE = {'token': '', 'expires_at': 0}
 
 # إدارة جلسات توثيق الشرائح والواتساب
 PENDING_VERIFICATIONS = {}
@@ -192,18 +196,113 @@ def load_notifications():
             save_json(NOTIFICATIONS_FILE, pruned)
         return list(pruned)
 
+def _b64url(raw_bytes):
+    return base64.urlsafe_b64encode(raw_bytes).decode('utf-8').rstrip('=')
+
+def _get_fcm_access_token():
+    now_ts = int(time.time())
+    if _FCM_TOKEN_CACHE['token'] and now_ts < _FCM_TOKEN_CACHE['expires_at']:
+        return _FCM_TOKEN_CACHE['token'], None
+
+    if not os.path.exists(FIREBASE_SA_FILE):
+        return '', None
+
+    sa = load_json(FIREBASE_SA_FILE)
+    client_email = sa.get('client_email')
+    private_key = sa.get('private_key')
+    token_uri = sa.get('token_uri') or 'https://oauth2.googleapis.com/token'
+    project_id = sa.get('project_id') or 'elmansheya-960f1'
+    if not client_email or not private_key:
+        return '', project_id
+
+    header = _b64url(b'{"alg":"RS256","typ":"JWT"}')
+    claims = _b64url(json.dumps({
+        'iss': client_email,
+        'scope': 'https://www.googleapis.com/auth/firebase.messaging',
+        'aud': token_uri,
+        'iat': now_ts,
+        'exp': now_ts + 3600,
+    }, separators=(',', ':')).encode('utf-8'))
+    signing_input = f'{header}.{claims}'.encode('utf-8')
+
+    key_path = None
+    try:
+        fd, key_path = tempfile.mkstemp(prefix='fcm_', suffix='.pem')
+        with os.fdopen(fd, 'w', encoding='utf-8') as kf:
+            kf.write(private_key)
+        proc = subprocess.run(
+            ['openssl', 'dgst', '-sha256', '-sign', key_path],
+            input=signing_input,
+            capture_output=True,
+            timeout=10,
+            check=True,
+        )
+        jwt_token = f'{header}.{claims}.{_b64url(proc.stdout)}'
+    finally:
+        if key_path and os.path.exists(key_path):
+            try:
+                os.remove(key_path)
+            except Exception:
+                pass
+
+    form = urllib.parse.urlencode({
+        'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        'assertion': jwt_token,
+    }).encode('utf-8')
+    req = urllib.request.Request(
+        token_uri,
+        data=form,
+        headers={'Content-Type': 'application/x-www-form-urlencoded'},
+        method='POST',
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        res_json = json.loads(resp.read().decode('utf-8'))
+        access_tok = res_json.get('access_token', '')
+        if access_tok:
+            _FCM_TOKEN_CACHE['token'] = access_tok
+            _FCM_TOKEN_CACHE['expires_at'] = now_ts + 3000
+        return access_tok, project_id
+
+def _send_fcm_v1_message(access_tok, project_id, target_key, target_val, title, body, str_data):
+    url = f'https://fcm.googleapis.com/v1/projects/{project_id}/messages:send'
+    payload = json.dumps({
+        'message': {
+            target_key: target_val,
+            'notification': {'title': title, 'body': body},
+            'data': str_data,
+            'android': {
+                'priority': 'high',
+                'notification': {'channel_id': 'default', 'sound': 'default'},
+            },
+        }
+    }, ensure_ascii=False).encode('utf-8')
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={
+            'Authorization': f'Bearer {access_tok}',
+            'Content-Type': 'application/json; charset=utf-8',
+        },
+        method='POST',
+    )
+    with urllib.request.urlopen(req, timeout=8) as r:
+        r.read()
+
 def dispatch_push_to_tokens(title, body, data):
     try:
         with NOTIF_LOCK:
             tokens_map = load_json(PUSH_TOKENS_FILE)
-        if not isinstance(tokens_map, dict) or not tokens_map:
-            return
+        if not isinstance(tokens_map, dict):
+            tokens_map = {}
 
-        messages = []
+        expo_messages = []
+        raw_fcm_tokens = []
         for tok in list(tokens_map.keys()):
             t = str(tok or '').strip()
+            if not t:
+                continue
             if t.startswith('ExponentPushToken[') or t.startswith('ExpoPushToken['):
-                messages.append({
+                expo_messages.append({
                     'to': t,
                     'sound': 'default',
                     'title': title,
@@ -211,9 +310,11 @@ def dispatch_push_to_tokens(title, body, data):
                     'data': data,
                     'priority': 'high',
                 })
+            else:
+                raw_fcm_tokens.append(t)
 
-        for i in range(0, len(messages), 100):
-            batch = messages[i:i + 100]
+        for i in range(0, len(expo_messages), 100):
+            batch = expo_messages[i:i + 100]
             payload = json.dumps(batch, ensure_ascii=False).encode('utf-8')
             req = urllib.request.Request(
                 'https://exp.host/--/api/v2/push/send',
@@ -226,6 +327,20 @@ def dispatch_push_to_tokens(title, body, data):
             )
             with urllib.request.urlopen(req, timeout=8) as r:
                 r.read()
+
+        if os.path.exists(FIREBASE_SA_FILE):
+            access_tok, project_id = _get_fcm_access_token()
+            if access_tok and project_id:
+                str_data = {str(k): str(v or '') for k, v in (data or {}).items()}
+                try:
+                    _send_fcm_v1_message(access_tok, project_id, 'topic', 'elmansheya_all', title, body, str_data)
+                except Exception as topic_err:
+                    print('[Gateway:fcm-topic]', topic_err)
+                for fcm_tok in raw_fcm_tokens:
+                    try:
+                        _send_fcm_v1_message(access_tok, project_id, 'token', fcm_tok, title, body, str_data)
+                    except Exception as tok_err:
+                        print('[Gateway:fcm-token]', tok_err)
     except Exception as e:
         print('[Gateway:push-dispatch]', e)
 

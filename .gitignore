@@ -14,9 +14,12 @@ Backend/go-api/*.exe
 Backend/go-api/server_linux
 Backend/go-api/tmp/
 
-# Sensitive deployment scripts with credentials
+# Sensitive deployment scripts and Firebase credentials
 deploy_*.py
 setup_*.py
+*firebase-adminsdk*.json
+Frontend/google-services.json
+firebase-service-account.json
 *.bat
 *.mp4
 
