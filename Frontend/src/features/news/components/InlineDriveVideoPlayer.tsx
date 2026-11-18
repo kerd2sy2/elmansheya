@@ -97,6 +97,11 @@ function NativeExoPlayerView({
   const [manuallyPaused, setManuallyPaused] = useState<boolean>(false);
 
   const mutePressTimeRef = useRef<number>(0);
+  const aspectRatioRef = useRef<number>(aspectRatio);
+
+  useEffect(() => {
+    aspectRatioRef.current = aspectRatio;
+  }, [aspectRatio]);
 
   // حماية صارمة لذاكرة أندرويد: حصر كاش الفيديو بـ 4MB كحد أقصى لمنع الـ OOM
   const videoSource = useMemo(() => ({
@@ -123,12 +128,12 @@ function NativeExoPlayerView({
 
         // أهم نقطة لمنع اللاج والقفزات:
         // إذا كانت الأبعاد الحالية قريبة من النسبة الطبيعية (الفرق أقل من 0.05)، لا نغير أي شيء في الـ layout نهائياً!
-        if (Math.abs(aspectRatio - clamped) > 0.05) {
+        if (Math.abs(aspectRatioRef.current - clamped) > 0.05) {
           onAspectRatioChange?.(clamped);
         }
       }
     },
-    [aspectRatio, cacheKey, streamUrl, effectiveCoverUrl, onAspectRatioChange]
+    [cacheKey, streamUrl, effectiveCoverUrl, onAspectRatioChange]
   );
 
   useEffect(() => {
@@ -362,41 +367,43 @@ export function InlineDriveVideoPlayer({
   const [aspectRatio, setAspectRatio] = useState<number>(resolvedInitialRatio);
   const [hasBeenMounted, setHasBeenMounted] = useState<boolean>(false);
 
-  // تحديث النسبة فور وصول أبعاد أدق من الكارت الأب أو الكاش
+  // تحديث النسبة عند تغير initialAspectRatio الممررة من الكارت الأب
   useEffect(() => {
-    if (initialAspectRatio && Math.abs(initialAspectRatio - aspectRatio) > 0.05) {
-      setAspectRatio(initialAspectRatio);
+    if (initialAspectRatio && initialAspectRatio > 0) {
+      setAspectRatio((prev) => (Math.abs(prev - initialAspectRatio) > 0.05 ? initialAspectRatio : prev));
     }
-  }, [initialAspectRatio, aspectRatio]);
+  }, [initialAspectRatio]);
 
   // فحص وقياس أبعاد صورة الغلاف/الثامبنيل فورياً في الخلفية لضبط حجم الكارت مسبقاً قبل بدء الفيديو
   useEffect(() => {
-    if (!effectiveCoverUrl) return;
+    if (initialAspectRatio || !effectiveCoverUrl) return;
     const existing = getCachedAspectRatio([cacheKey, videoUrl, effectiveCoverUrl]);
     if (existing) {
-      if (Math.abs(existing - aspectRatio) > 0.05) {
-        setAspectRatio(existing);
-      }
+      setAspectRatio((prev) => (Math.abs(prev - existing) > 0.05 ? existing : prev));
       return;
     }
 
+    let isMounted = true;
     RNImage.getSize(
       effectiveCoverUrl,
       (w, h) => {
+        if (!isMounted) return;
         if (w > 0 && h > 0) {
           const ratio = w / h;
           const clamped = Math.max(0.68, Math.min(ratio, 2.2));
           if (cacheKey) setCachedAspectRatio(cacheKey, clamped);
           setCachedAspectRatio(effectiveCoverUrl, clamped);
           setCachedAspectRatio(videoUrl, clamped);
-          if (Math.abs(aspectRatio - clamped) > 0.05) {
-            setAspectRatio(clamped);
-          }
+          setAspectRatio((prev) => (Math.abs(prev - clamped) > 0.05 ? clamped : prev));
         }
       },
       () => {}
     );
-  }, [effectiveCoverUrl, cacheKey, videoUrl, aspectRatio]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [effectiveCoverUrl, cacheKey, videoUrl, initialAspectRatio]);
 
   const containerDimension = height
     ? { height }
