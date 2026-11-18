@@ -180,8 +180,13 @@ export function LoginScreen() {
     setErrorText(null);
   };
 
+  const requiredPhoneLength = phone.startsWith('0') ? 11 : 10;
+  const isPhoneComplete = phone.length === requiredPhoneLength;
+
   const handlePhoneChange = (text: string) => {
-    const clean = text.replace(/[^0-9]/g, '');
+    let clean = text.replace(/[^0-9]/g, '');
+    const maxLen = clean.startsWith('0') ? 11 : 10;
+    clean = clean.slice(0, maxLen);
     if (clean.startsWith('05') && clean.length >= 3 && dialCode === '+20') {
       setDialCode('+966');
     } else if (clean.startsWith('01') && clean.length >= 3 && dialCode === '+966') {
@@ -201,8 +206,12 @@ export function LoginScreen() {
       return;
     }
 
-    if (!phone.trim() || phone.trim().length < 7) {
-      setErrorText('يرجى إدخال رقم هاتف صحيح للمتابعة.');
+    if (!isPhoneComplete) {
+      setErrorText(
+        phone.startsWith('0')
+          ? 'يرجى إكمال رقم الهاتف (11 رقماً عند البدء بـ 0).'
+          : 'يرجى إكمال رقم الهاتف (10 أرقام بدون 0 في البداية).'
+      );
       return;
     }
 
@@ -413,10 +422,14 @@ export function LoginScreen() {
                       placeholder="رقم الهاتف"
                       placeholderTextColor="#94A3B8"
                       keyboardType="phone-pad"
-                      maxLength={15}
+                      maxLength={requiredPhoneLength}
                       selectionColor={APP_THEME.primary}
                       returnKeyType="done"
-                      onSubmitEditing={handleSendWhatsAppOtp}
+                      onSubmitEditing={() => {
+                        if (isPhoneComplete) {
+                          handleSendWhatsAppOtp();
+                        }
+                      }}
                     />
                   </View>
                 </View>
@@ -424,11 +437,11 @@ export function LoginScreen() {
                 <Pressable
                   style={({ pressed }) => [
                     styles.primaryBtn,
-                    (!phone.trim() || submitting) && styles.primaryBtnDisabled,
+                    (!isPhoneComplete || submitting) && styles.primaryBtnDisabled,
                     pressed && styles.primaryBtnPressed,
                   ]}
                   onPress={handleSendWhatsAppOtp}
-                  disabled={!phone.trim() || submitting}>
+                  disabled={!isPhoneComplete || submitting}>
                   {submitting ? (
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
