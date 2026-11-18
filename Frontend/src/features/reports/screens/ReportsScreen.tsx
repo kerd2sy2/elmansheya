@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -170,25 +170,33 @@ export function ReportsScreen() {
   const [mediaList, setMediaList] = useState<MediaAttachment[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // دعم زر الرجوع بهواتف أندرويد
-  useEffect(() => {
-    if (currentView === 'create') {
-      const backHandler = BackHandler.addEventListener(
-        'hardwareBackPress',
-        () => {
-          if (showCategorySheet) {
-            setShowCategorySheet(false);
-          } else if (showSuccessSheet) {
-            setShowSuccessSheet(false);
-          } else {
-            setCurrentView('list');
-          }
+  // دعم زر الرجوع بهواتف أندرويد للرجوع خطوة واحدة دائماً
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (trackingReport) {
+          setTrackingReport(null);
           return true;
         }
-      );
-      return () => backHandler.remove();
-    }
-  }, [currentView, showCategorySheet, showSuccessSheet]);
+        if (showCategorySheet) {
+          setShowCategorySheet(false);
+          return true;
+        }
+        if (showSuccessSheet) {
+          setShowSuccessSheet(false);
+          return true;
+        }
+        if (currentView === 'create') {
+          setCurrentView('list');
+          return true;
+        }
+        return false;
+      };
+
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, [currentView, showCategorySheet, showSuccessSheet, trackingReport])
+  );
 
   // زر صغير لاختيار مرفق (صورة أو فيديو من المعرض)
   const handlePickAnyMedia = async () => {

@@ -76,7 +76,13 @@ function AppRootGate() {
     if (!isAuthenticated) return;
 
     const onHardwareBackPress = () => {
-      // إذا كان المستخدم على الشاشة الرئيسية، الخروج من التطبيق فورياً
+      // إذا كان هناك صفحة سابقة في سجل المكدس، الرجوع لها
+      if (router.canGoBack()) {
+        router.back();
+        return true;
+      }
+
+      // إذا كان المستخدم على الشاشة الرئيسية ولا يوجد صفحات سابقة، الخروج من التطبيق فورياً
       const isHome =
         pathname === '/' || pathname === '/index' || pathname === '';
       if (isHome) {
@@ -84,10 +90,8 @@ function AppRootGate() {
         return true;
       }
 
-      // إذا كان في أي صفحة أخرى (مثل الملف الشخصي، البلاغات، الخدمات، الصنايعية):
-      // الرجوع دائماً ومباشرة إلى الشاشة الرئيسية (وليس الصفحات السابقة في التاريخ)
-      router.replace('/');
-      return true;
+      // السماح لنظام التبويبات (Tabs backBehavior="history") بالرجوع للتبويب السابق
+      return false;
     };
 
     const sub = BackHandler.addEventListener(

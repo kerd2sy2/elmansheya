@@ -184,7 +184,7 @@ const NAVBAR_CAPSULE_HEIGHT = 48;
 export default function AppTabs() {
   return (
     <Tabs
-      backBehavior="firstRoute"
+      backBehavior="history"
       detachInactiveScreens={false}
       tabBar={(props: any) => <VillageBottomTabBar {...props} />}
       screenOptions={{

@@ -1,14 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   Linking,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import {
@@ -16,7 +16,6 @@ import {
   useSafeTopInset,
 } from '@/core/theme/useSafeTopInset';
 import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
-import { API_BASE_URL } from '@/core/config/api.config';
 import { fetchModuleData } from '@/core/api-client/apiClient';
 import { WidgetErrorBoundary } from '@/core/error-boundary/WidgetErrorBoundary';
 import { useAuth } from '@/features/auth/context/AuthContext';
@@ -98,7 +97,7 @@ export function ServicesScreen() {
   const bottomTabPadding = useSafeBottomTabPadding();
   const { user } = useAuth();
   const [selectedCategory, setSelectedCategory] =
-    useState<ServiceCategoryItem>(NINE_SERVICE_CATEGORIES[0]);
+    useState<ServiceCategoryItem | null>(null);
   const [items, setItems] = useState<ServiceDetailItem[]>([]);
   const [loadingItems, setLoadingItems] = useState<boolean>(false);
 
@@ -117,110 +116,189 @@ export function ServicesScreen() {
   }, []);
 
   useEffect(() => {
-    loadCategoryItems(selectedCategory.slug);
-  }, [selectedCategory.slug, loadCategoryItems]);
+    if (selectedCategory) {
+      loadCategoryItems(selectedCategory.slug);
+    } else {
+      setItems([]);
+    }
+  }, [selectedCategory, loadCategoryItems]);
+
+  // دعم زر الرجوع الفيزيائي في أندرويد: الرجوع من القسم للشبكة أولاً قبل الرجوع للصفحة السابقة
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (selectedCategory) {
+          setSelectedCategory(null);
+          return true;
+        }
+        return false;
+      };
+
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, [selectedCategory])
+  );
 
   return (
     <View style={[styles.screenContainer, { paddingTop: topInset }]}>
-      {/* هيدر الصفحة الرئيسي الثابت (Fixed Sticky Header) */}
-      <View style={styles.fixedHeader}>
-        <View style={styles.headerTitlesBox}>
-          <Text style={styles.title}>الخدمات</Text>
-          <Text style={styles.headerSubtitle}>
-            ٩ أقسام رئيسية لتصفح الخدمات ومواعيد العمل والأماكن بالقرية
-          </Text>
-        </View>
-      </View>
+      {selectedCategory ? (
+        /* ٢. صفحة القسم الخدمي المختار بالكامل مع سهم رجوع نظيف ومحاذاة يمين كاملة */
+        <View style={styles.tabContainer}>
+          <View style={styles.subPageFixedHeader}>
+            <View style={styles.subPageHeaderRow}>
+              {/* سهم الرجوع النظيف بدون أي خلفية */}
+              <Pressable
+                style={styles.cleanBackArrowBtn}
+                onPress={() => setSelectedCategory(null)}
+                hitSlop={12}
+                accessibilityLabel="رجوع لجميع أقسام الخدمات">
+                <Ionicons
+                  name="arrow-forward"
+                  size={24}
+                  color="#0F172A"
+                />
+              </Pressable>
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: bottomTabPadding },
-        ]}
-        showsVerticalScrollIndicator={false}
-        nestedScrollEnabled={true}
-        keyboardShouldPersistTaps="handled"
-        canCancelContentTouches={true}
-        directionalLockEnabled={false}
-        overScrollMode="always">
-        <WidgetErrorBoundary widgetNameAr="شبكة الخدمات الـ 9">
-          <View style={styles.grid}>
-            {NINE_SERVICE_CATEGORIES.map((cat) => (
-              <ServiceCategoryGridCard
-                key={cat.id}
-                item={cat}
-                isSelected={selectedCategory.slug === cat.slug}
-                onPress={() => {
-                  if (cat.slug === 'village_issues') {
-                    router.push('/reports');
-                    return;
+              {/* عنوان القسم مع الأيقونة بجانبه مباشرة بمحاذاة اليمين */}
+              <View style={styles.subPageTitleBlock}>
+                <Ionicons
+                  name={
+                    (selectedCategory.icon ||
+                      'grid-outline') as keyof typeof Ionicons.glyphMap
                   }
-                  setSelectedCategory(cat);
-                }}
-              />
-            ))}
-          </View>
-        </WidgetErrorBoundary>
-
-        <WidgetErrorBoundary widgetNameAr="تفاصيل الخدمات المسجلة">
-          <View style={styles.detailsHeaderRow}>
-            <Text style={styles.detailsTitle}>
-              الجهات والخدمات في «{selectedCategory.name_ar}» ({items.length})
-            </Text>
+                  size={22}
+                  color="#973c00"
+                />
+                <Text style={styles.subPageMainTitle}>
+                  {selectedCategory.name_ar}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.subPageDesc}>{selectedCategory.description}</Text>
           </View>
 
-          {loadingItems ? (
-            <ActivityIndicator size="small" color="#973c00" />
-          ) : !Array.isArray(items) || items.length === 0 ? (
-            <View style={styles.emptyBox}>
-              <Ionicons name="folder-open-outline" size={32} color="#94A3B8" />
-              <Text style={styles.emptyTitle}>لا توجد خدمات مسجلة بعد في هذا القسم</Text>
-              <Text style={styles.emptyDesc}>
-                اضغط على زر «إضافة خدمة» أعلاه لإضافة أول جهة أو موعد في هذا
-                القسم، وسيتم حفظها بشكل دائم على الخادم.
+          <ScrollView
+            contentContainerStyle={[
+              styles.content,
+              { paddingBottom: bottomTabPadding },
+            ]}
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
+            canCancelContentTouches={true}
+            directionalLockEnabled={false}
+            overScrollMode="always">
+            <WidgetErrorBoundary widgetNameAr="تفاصيل الخدمات المسجلة">
+              <View style={styles.detailsHeaderRow}>
+                <Text style={styles.detailsTitle}>
+                  الجهات والخدمات المسجلة ({items.length})
+                </Text>
+              </View>
+
+              {loadingItems ? (
+                <View style={styles.loadingBox}>
+                  <ActivityIndicator size="small" color="#973c00" />
+                  <Text style={styles.loadingText}>جاري تحميل البيانات...</Text>
+                </View>
+              ) : !Array.isArray(items) || items.length === 0 ? (
+                <View style={styles.emptyBox}>
+                  <Ionicons name="folder-open-outline" size={36} color="#94A3B8" />
+                  <Text style={styles.emptyTitle}>
+                    لا توجد خدمات مسجلة بعد في «{selectedCategory.name_ar}»
+                  </Text>
+                  <Text style={styles.emptyDesc}>
+                    سيتم إضافة الأماكن والخدمات ومواعيد العمل وأرقام التواصل تباعاً لخدمة أهالي القرية.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.itemsList}>
+                  {items.map((it) => (
+                    <View key={it.id} style={styles.itemCard}>
+                      <Text style={styles.itemTitle}>{it.title}</Text>
+                      {it.description ? (
+                        <Text style={styles.itemDesc}>{it.description}</Text>
+                      ) : null}
+
+                      {it.phone ? (
+                        <Pressable
+                          style={styles.callRow}
+                          onPress={() => Linking.openURL(`tel:${it.phone}`)}>
+                          <Ionicons name="call-outline" size={14} color="#973c00" />
+                          <Text style={styles.phoneText}>اتصال: {it.phone}</Text>
+                        </Pressable>
+                      ) : null}
+
+                      {it.working_hours ? (
+                        <View style={styles.metaRow}>
+                          <Ionicons name="time-outline" size={14} color="#64748B" />
+                          <Text style={styles.metaText}>المواعيد: {it.working_hours}</Text>
+                        </View>
+                      ) : null}
+
+                      {it.address ? (
+                        <View style={styles.metaRow}>
+                          <Ionicons name="location-outline" size={14} color="#64748B" />
+                          <Text style={styles.metaText}>المكان: {it.address}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+              )}
+            </WidgetErrorBoundary>
+          </ScrollView>
+        </View>
+      ) : (
+        /* ١. الصفحة الرئيسية للخدمات: هيدر موحد وشبكة الـ ٩ أقسام فقط */
+        <View style={styles.tabContainer}>
+          <View style={styles.fixedHeader}>
+            <View style={styles.headerTitlesBox}>
+              <Text style={styles.title}>الخدمات</Text>
+              <Text style={styles.headerSubtitle}>
+                ٩ أقسام رئيسية لتصفح الخدمات ومواعيد العمل والأماكن بالقرية
               </Text>
             </View>
-          ) : (
-            <View style={styles.itemsList}>
-              {items.map((it) => (
-                <View key={it.id} style={styles.itemCard}>
-                  <Text style={styles.itemTitle}>{it.title}</Text>
-                  <Text style={styles.itemDesc}>{it.description}</Text>
+          </View>
 
-                  {it.phone ? (
-                    <Pressable
-                      style={styles.callRow}
-                      onPress={() => Linking.openURL(`tel:${it.phone}`)}>
-                      <Ionicons name="call-outline" size={14} color="#973c00" />
-                      <Text style={styles.phoneText}>اتصال: {it.phone}</Text>
-                    </Pressable>
-                  ) : null}
-
-                  {it.working_hours ? (
-                    <View style={styles.metaRow}>
-                      <Ionicons name="time-outline" size={14} color="#64748B" />
-                      <Text style={styles.metaText}>المواعيد: {it.working_hours}</Text>
-                    </View>
-                  ) : null}
-
-                  {it.address ? (
-                    <View style={styles.metaRow}>
-                      <Ionicons name="location-outline" size={14} color="#64748B" />
-                      <Text style={styles.metaText}>المكان: {it.address}</Text>
-                    </View>
-                  ) : null}
-                </View>
-              ))}
-            </View>
-          )}
-        </WidgetErrorBoundary>
-      </ScrollView>
+          <ScrollView
+            contentContainerStyle={[
+              styles.content,
+              { paddingBottom: bottomTabPadding },
+            ]}
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
+            canCancelContentTouches={true}
+            directionalLockEnabled={false}
+            overScrollMode="always">
+            <WidgetErrorBoundary widgetNameAr="شبكة الخدمات الـ 9">
+              <View style={styles.grid}>
+                {NINE_SERVICE_CATEGORIES.map((cat) => (
+                  <ServiceCategoryGridCard
+                    key={cat.id}
+                    item={cat}
+                    isSelected={false}
+                    onPress={() => {
+                      if (cat.slug === 'village_issues') {
+                        router.push('/reports');
+                        return;
+                      }
+                      setSelectedCategory(cat);
+                    }}
+                  />
+                ))}
+              </View>
+            </WidgetErrorBoundary>
+          </ScrollView>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screenContainer: { flex: 1, backgroundColor: '#FAF5EE' },
+  tabContainer: { flex: 1, width: '100%' },
   content: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 5 },
   fixedHeader: {
     flexDirection: rtlFlexDirection,
@@ -249,141 +327,57 @@ const styles = StyleSheet.create({
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
   },
-  reportsBannerCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 16,
-    borderWidth: 1.5,
-    borderColor: '#FED7AA',
+  subPageFixedHeader: {
+    backgroundColor: '#FAF5EE',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1E9DA',
+  },
+  subPageHeaderRow: {
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    elevation: 3,
-    shadowColor: '#973c00',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    gap: 10,
   },
-  reportsBannerRight: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    flex: 1,
-    gap: 12,
-  },
-  reportsIconBox: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#FFF7ED',
+  cleanBackArrowBtn: {
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#FED7AA',
   },
-  reportsTextCol: {
-    flex: 1,
-    alignItems: 'flex-start',
-  },
-  reportsTitleRow: {
+  subPageTitleBlock: {
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
     gap: 8,
-    marginBottom: 3,
+    flex: 1,
   },
-  reportsBannerTitle: {
-    fontSize: 15,
+  subPageMainTitle: {
+    fontSize: 20,
     fontWeight: '800',
     color: '#0F172A',
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
   },
-  liveBadge: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-  },
-  liveBadgeText: {
-    color: '#15803D',
-    fontSize: 10.5,
-    fontWeight: '700',
-  },
-  reportsBannerDesc: {
+  subPageDesc: {
     fontSize: 12,
     color: '#64748B',
-    lineHeight: 18,
+    marginTop: 4,
+    marginRight: 48,
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
+    lineHeight: 18,
   },
-  reportsBannerArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFF7ED',
+  loadingBox: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
+    paddingVertical: 32,
+    gap: 8,
   },
-  addBtn: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#973c00',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  addBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  formCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-    marginBottom: 16,
-    gap: 10,
-  },
-  formTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  input: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 44,
+  loadingText: {
     fontSize: 13,
-    color: '#0F172A',
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  textArea: {
-    height: 70,
-    paddingTop: 10,
-  },
-  submitBtn: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#973c00',
-    paddingVertical: 12,
-    borderRadius: 10,
-  },
-  submitBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
+    color: '#64748B',
+    textAlign: rtlTextAlign,
   },
   grid: {
     flexDirection: rtlFlexDirection,
@@ -392,7 +386,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   detailsHeaderRow: {
-    marginBottom: 10,
+    marginBottom: 12,
+    marginTop: 4,
   },
   detailsTitle: {
     fontSize: 16,
@@ -468,6 +463,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     alignItems: 'center',
+    marginVertical: 12,
   },
   emptyTitle: {
     fontSize: 14,

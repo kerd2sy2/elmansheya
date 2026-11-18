@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -208,21 +209,33 @@ export function CraftsmenScreen() {
     loadDirectory();
   }, [loadDirectory]);
 
-  // دعم زر الرجوع في الهاتف للعودة من صفحة الصنايعي -> صفحة الصنعة -> كل الوظائف
-  useEffect(() => {
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (selectedCraftsman) {
-        setSelectedCraftsman(null);
-        return true;
-      }
-      if (selectedProfession) {
-        setSelectedProfession(null);
-        return true;
-      }
-      return false;
-    });
-    return () => sub.remove();
-  }, [selectedCraftsman, selectedProfession]);
+  // دعم زر الرجوع في الهاتف للعودة خطوة واحدة دائماً: من صفحة الصنايعي -> صفحة الصنعة -> كل الوظائف
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (previewWorkImage) {
+          setPreviewWorkImage(null);
+          return true;
+        }
+        if (ratingTarget) {
+          setRatingTarget(null);
+          return true;
+        }
+        if (selectedCraftsman) {
+          setSelectedCraftsman(null);
+          return true;
+        }
+        if (selectedProfession) {
+          setSelectedProfession(null);
+          return true;
+        }
+        return false;
+      };
+
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, [previewWorkImage, ratingTarget, selectedCraftsman, selectedProfession])
+  );
 
   // مطابقة الصنايعي مع الصنعة المختارة
   const doesCraftsmanMatchCategory = useCallback(
