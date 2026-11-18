@@ -221,6 +221,12 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
             </View>
           </View>
         </View>
+
+        {/* أيقونة المشاهدات على الشمال بالرقم فقط وبدون كلمة مشاهدة */}
+        <View style={styles.viewsWrap}>
+          <Ionicons name="eye-outline" size={13.5} color="#94A3B8" />
+          <Text style={styles.viewsText}>{item.views_count}</Text>
+        </View>
       </View>
 
       {/* ٢. عنوان المنشور - محاذاة صارمة من اليمين إلى اليسار */}
@@ -283,14 +289,6 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
           />
         </View>
       ) : null}
-
-      {/* ٥. شريط تذييل البوست: عدد المشاهدات */}
-      <View style={styles.footer}>
-        <View style={styles.viewsWrap}>
-          <Ionicons name="eye-outline" size={14} color="#64748B" />
-          <Text style={styles.viewsText}>{item.views_count} مشاهدة</Text>
-        </View>
-      </View>
     </View>
   );
 });
@@ -312,7 +310,8 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: rtlFlexDirection,
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     marginBottom: 12,
     width: '100%',
   },
@@ -320,6 +319,7 @@ const styles = StyleSheet.create({
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
     gap: 12,
+    flex: 1,
   },
   avatar: {
     width: 44,
@@ -438,29 +438,22 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: '#0F172A',
-    marginBottom: 12,
+    marginBottom: 4,
   },
   image: {
     width: '100%',
     backgroundColor: '#0F172A',
   },
-  footer: {
-    flexDirection: rtlFlexDirection,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 10,
-    width: '100%',
-  },
   viewsWrap: {
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
+    paddingTop: 3,
+    paddingHorizontal: 2,
   },
   viewsText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
+    fontSize: 11.5,
+    color: '#94A3B8',
+    fontWeight: '700',
   },
 });

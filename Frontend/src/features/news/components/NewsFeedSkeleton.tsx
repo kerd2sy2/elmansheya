@@ -11,14 +11,17 @@ function SkeletonCard({
 }) {
   return (
     <View style={styles.card}>
-      {/* رأس الكارت: صورة الناشر والمعلومات */}
+      {/* رأس الكارت: صورة الناشر والمعلومات + المشاهدات على الشمال */}
       <View style={styles.headerRow}>
-        <Animated.View style={[styles.avatar, { opacity: pulseAnim }]} />
-        <View style={styles.authorInfoCol}>
-          <Animated.View style={[styles.bar, styles.authorNameBar, { opacity: pulseAnim }]} />
-          <Animated.View style={[styles.bar, styles.authorRoleBar, { opacity: pulseAnim }]} />
-          <Animated.View style={[styles.bar, styles.timeBar, { opacity: pulseAnim }]} />
+        <View style={styles.authorGroup}>
+          <Animated.View style={[styles.avatar, { opacity: pulseAnim }]} />
+          <View style={styles.authorInfoCol}>
+            <Animated.View style={[styles.bar, styles.authorNameBar, { opacity: pulseAnim }]} />
+            <Animated.View style={[styles.bar, styles.authorRoleBar, { opacity: pulseAnim }]} />
+            <Animated.View style={[styles.bar, styles.timeBar, { opacity: pulseAnim }]} />
+          </View>
         </View>
+        <Animated.View style={[styles.bar, styles.viewsBar, { opacity: pulseAnim }]} />
       </View>
 
       {/* عنوان البوست */}
@@ -36,11 +39,6 @@ function SkeletonCard({
       {hasMedia ? (
         <Animated.View style={[styles.mediaBox, { opacity: pulseAnim }]} />
       ) : null}
-
-      {/* شريط التذييل: عدد المشاهدات */}
-      <View style={styles.footerRow}>
-        <Animated.View style={[styles.bar, styles.viewsBar, { opacity: pulseAnim }]} />
-      </View>
     </View>
   );
 }
@@ -99,9 +97,15 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: rtlFlexDirection,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  authorGroup: {
+    flexDirection: rtlFlexDirection,
     alignItems: 'center',
     gap: 10,
-    marginBottom: 12,
+    flex: 1,
   },
   avatar: {
     width: 44,
@@ -151,19 +155,12 @@ const styles = StyleSheet.create({
     aspectRatio: 16 / 9,
     borderRadius: 12,
     backgroundColor: '#E2E8F0',
-    marginBottom: 12,
-  },
-  footerRow: {
-    flexDirection: rtlFlexDirection,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F8FAFC',
+    marginBottom: 4,
   },
   viewsBar: {
-    width: 65,
+    width: 45,
     height: 14,
     borderRadius: 6,
+    marginTop: 4,
   },
 });
