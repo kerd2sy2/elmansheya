@@ -67,12 +67,16 @@ function NativeExoPlayerView({
   height,
   isActive,
   autoPlayAllowed,
+  aspectRatio,
+  onAspectRatioChange,
 }: {
   streamUrl: string;
   effectiveCoverUrl?: string | null;
   height?: number;
   isActive: boolean;
   autoPlayAllowed: boolean;
+  aspectRatio: number;
+  onAspectRatioChange?: (ratio: number) => void;
 }) {
   const videoViewRef = useRef<any>(null);
   const { useVideoPlayer, VideoView } = ExpoVideoModule;
@@ -81,8 +85,6 @@ function NativeExoPlayerView({
   const [isMuted, setIsMuted] = useState<boolean>(true);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [manuallyPaused, setManuallyPaused] = useState<boolean>(false);
-  // تحديد نسبة العرض إلى الارتفاع الطبيعية للفيديو تلقائياً لعرضه كاملاً دون أي اقتصاص
-  const [videoAspectRatio, setVideoAspectRatio] = useState<number>(16 / 9);
 
   // حماية صارمة لذاكرة أندرويد: حصر كاش الفيديو بـ 4MB كحد أقصى لمنع الـ OOM
   const videoSource = useMemo(() => ({
@@ -111,7 +113,7 @@ function NativeExoPlayerView({
       if (size?.width && size?.height && size.height > 0) {
         const ratio = size.width / size.height;
         const clamped = Math.max(0.68, Math.min(ratio, 2.2));
-        setVideoAspectRatio(clamped);
+        onAspectRatioChange?.(clamped);
       }
     });
     const subSource = player.addListener?.('sourceLoad', (ev: any) => {
@@ -120,7 +122,7 @@ function NativeExoPlayerView({
       if (size?.width && size?.height && size.height > 0) {
         const ratio = size.width / size.height;
         const clamped = Math.max(0.68, Math.min(ratio, 2.2));
-        setVideoAspectRatio(clamped);
+        onAspectRatioChange?.(clamped);
       }
     });
 
@@ -130,11 +132,11 @@ function NativeExoPlayerView({
       subTrack?.remove();
       subSource?.remove();
     };
-  }, [player]);
+  }, [player, onAspectRatioChange]);
 
   // إدارة التشغيل التلقائي عند التمرير:
   // - يشتغل فقط عندما يصبح الفيديو في منتصف الشاشة (isActive=true)
-  // - يتوقف فوراً عند عمل سكرول ومغادرة الشاشة (isActive=false)
+  // - يتوقف فوراً وسلساً عند عمل سكرول ومغادرة الشاشة (isActive=false) دون تدمير المشغل أو تقليص الكارت
   // - إذا أوقفه المستخدم بيده، يظل متوقفاً حتى يضغط عليه بيده مجدداً
   useEffect(() => {
     if (!player) return;
@@ -146,7 +148,7 @@ function NativeExoPlayerView({
         } catch {}
       }
     } else {
-      // إيقاف فوري عند السحب بعيداً
+      // إيقاف فوري وسلس جداً في أجزاء من الملي ثانية دون أي هدم لواجهة المستخدم أو تقليص لأبعاد الكارت
       try {
         player.pause();
       } catch {}
@@ -187,7 +189,7 @@ function NativeExoPlayerView({
     <View
       style={[
         styles.container,
-        height ? { height } : { width: '100%', aspectRatio: videoAspectRatio },
+        height ? { height } : { width: '100%', aspectRatio },
       ]}>
       {/* خلفية صورة المعاينة الفورية: تمنع أي شاشة سوداء أثناء تحميل الفيديو عبر الإنترنت */}
       {effectiveCoverUrl ? (
@@ -310,6 +312,8 @@ export function InlineDriveVideoPlayer({
 }: InlineDriveVideoPlayerProps) {
   const [autoPlayAllowed, setAutoPlayAllowed] = useState<boolean>(true);
   const [userExplicitPlay, setUserExplicitPlay] = useState<boolean>(false);
+  const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
+  const [hasBeenMounted, setHasBeenMounted] = useState<boolean>(false);
 
   const fileId = extractGoogleDriveFileId(videoUrl);
   const directStreamUrl = getDirectVideoUrl(videoUrl);
@@ -317,7 +321,9 @@ export function InlineDriveVideoPlayer({
   const effectiveCoverUrl =
     coverImageUrl || getGoogleDriveThumbnailUrl(videoUrl);
 
-  const containerDimension = height ? { height } : { width: '100%' as const, aspectRatio: 16 / 9 };
+  const containerDimension = height
+    ? { height }
+    : { width: '100%' as const, aspectRatio };
 
   useEffect(() => {
     let isMounted = true;
@@ -339,6 +345,14 @@ export function InlineDriveVideoPlayer({
     };
   }, []);
 
+  // تفعيل تركيب المشغل عند وصول الكارت إلى مركز الشاشة لأول مرة
+  // وبمجرد تركيبه يظل المشغل موجوداً وثابتاً بالأبعاد الطبيعية دون أي تقليص أو هدم مفاجئ
+  useEffect(() => {
+    if ((isActive && autoPlayAllowed) || userExplicitPlay) {
+      setHasBeenMounted(true);
+    }
+  }, [isActive, autoPlayAllowed, userExplicitPlay]);
+
   const handleFallbackPlay = async () => {
     try {
       await WebBrowser.openBrowserAsync(previewUrl, {
@@ -352,24 +366,30 @@ export function InlineDriveVideoPlayer({
     }
   };
 
-  // حماية الذاكرة الصارمة (Strict Single ExoPlayer in Memory):
-  // لا نقوم بتركيب كائن ExoPlayer في ذاكرة الهاتف إلا إذا كان هذا الكارت هو النشط حصراً في منتصف الشاشة
-  // أو إذا ضغط المستخدم بإصبعه على هذا الكارت تحديداً.
-  // بمجرد أن يمرر المستخدم بعيداً (isActive=false)، يُحذف الكائن وتسترجع الذاكرة كاملة فوراً!
-  const shouldMountPlayer = (isActive && autoPlayAllowed) || userExplicitPlay;
-
-  if (!shouldMountPlayer) {
+  // العرض المبدئي قبل وصول المستخدم للكارت (صورة الغلاف بنفس نسبة الأبعاد الدقيقة)
+  // لمنع استهلاك الذاكرة قبل التمرير على الكارت
+  if (!hasBeenMounted) {
     return (
       <Pressable
         style={[styles.container, containerDimension]}
-        onPress={() => setUserExplicitPlay(true)}
+        onPress={() => {
+          setUserExplicitPlay(true);
+          setHasBeenMounted(true);
+        }}
         accessibilityLabel="تشغيل الفيديو المدمج">
         {effectiveCoverUrl ? (
           <Image
             source={{ uri: effectiveCoverUrl }}
             style={styles.coverImage}
             contentFit="contain"
-            transition={200}
+            onLoad={(e) => {
+              const { width, height: imgHeight } = e.source || {};
+              if (width && imgHeight && imgHeight > 0) {
+                const ratio = width / imgHeight;
+                const clamped = Math.max(0.68, Math.min(ratio, 2.2));
+                setAspectRatio(clamped);
+              }
+            }}
           />
         ) : (
           <View style={[styles.coverImage, styles.darkPoster]}>
@@ -391,6 +411,7 @@ export function InlineDriveVideoPlayer({
   }
 
   // ١. المشغل الأصيل فائق السرعة عبر مكتبة expo-video (ExoPlayer للأندرويد)
+  // يظل محتفظاً بأبعاده الطبيعية عند تخطي الكارت ويقوم بالإيقاف المؤقت pause() فقط بدون تقليص أو لاج
   if (ExpoVideoModule && directStreamUrl) {
     return (
       <NativeExoPlayerView
@@ -399,6 +420,8 @@ export function InlineDriveVideoPlayer({
         height={height}
         isActive={isActive}
         autoPlayAllowed={autoPlayAllowed}
+        aspectRatio={aspectRatio}
+        onAspectRatioChange={setAspectRatio}
       />
     );
   }
