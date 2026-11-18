@@ -590,16 +590,14 @@ export function CraftsmenScreen() {
           </ScrollView>
         </View>
       ) : (
-        /* ٣. الصفحة الرئيسية للصنايعية: هيدر ثابت بدون أيقونة وبالعنوان "الصنايعية" */
+        /* ٣. الصفحة الرئيسية للصنايعية: هيدر ثابت متطابق تماماً مع الخدمات والبلاغات */
         <View style={styles.tabContainer}>
-          <View style={styles.fixedHeaderArea}>
-            <View style={styles.topHeader}>
-              <View style={styles.headerTextCol}>
-                <Text style={styles.title}>الصنايعية</Text>
-                <Text style={styles.subtitle}>
-                  دليل الحرفيين والخدمات المنزلية بقرية المنشية
-                </Text>
-              </View>
+          <View style={styles.fixedHeader}>
+            <View style={styles.headerTitlesBox}>
+              <Text style={styles.title}>الصنايعية</Text>
+              <Text style={styles.headerSubtitle}>
+                دليل الحرفيين والخدمات المنزلية بقرية المنشية
+              </Text>
             </View>
           </View>
 
@@ -704,11 +702,19 @@ export function CraftsmenScreen() {
 const styles = StyleSheet.create({
   screenContainer: { flex: 1, backgroundColor: '#FAF5EE' },
   tabContainer: { flex: 1, width: '100%' },
-  fixedHeaderArea: {
-    backgroundColor: '#FAF5EE',
+  fixedHeader: {
+    flexDirection: rtlFlexDirection,
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingVertical: 14,
+    backgroundColor: '#FAF5EE',
+    borderBottomWidth: 0,
+    zIndex: 10,
+  },
+  headerTitlesBox: {
+    gap: 2,
+    flex: 1,
   },
   fixedSubHeaderBox: {
     backgroundColor: '#FAF5EE',
@@ -718,33 +724,18 @@ const styles = StyleSheet.create({
   },
   content: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 5 },
   cardsList: { gap: 12 },
-  topHeader: {
-    flexDirection: rtlFlexDirection,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 10,
-    width: '100%',
-  },
-  headerTextCol: {
-    flex: 1,
-    alignItems: 'stretch',
-  },
   title: {
-    fontSize: 21,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '900',
     color: '#0F172A',
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
-    width: '100%',
   },
-  subtitle: {
-    fontSize: 12.5,
+  headerSubtitle: {
+    fontSize: 12,
     color: '#64748B',
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
-    width: '100%',
-    marginTop: 2,
   },
   detailBackRow: {
     flexDirection: rtlFlexDirection,

@@ -122,6 +122,16 @@ export function ServicesScreen() {
 
   return (
     <View style={[styles.screenContainer, { paddingTop: topInset }]}>
+      {/* هيدر الصفحة الرئيسي الثابت (Fixed Sticky Header) */}
+      <View style={styles.fixedHeader}>
+        <View style={styles.headerTitlesBox}>
+          <Text style={styles.title}>الخدمات</Text>
+          <Text style={styles.headerSubtitle}>
+            ٩ أقسام رئيسية لتصفح الخدمات ومواعيد العمل والأماكن بالقرية
+          </Text>
+        </View>
+      </View>
+
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -133,15 +143,6 @@ export function ServicesScreen() {
         canCancelContentTouches={true}
         directionalLockEnabled={false}
         overScrollMode="always">
-        <View style={styles.headerRow}>
-          <View style={styles.headerTextCol}>
-            <Text style={styles.title}>خدماتي</Text>
-            <Text style={styles.subtitle}>
-              ٩ أقسام رئيسية لتصفح الخدمات ومواعيد العمل والأماكن بالقرية
-            </Text>
-          </View>
-        </View>
-
         <WidgetErrorBoundary widgetNameAr="شبكة الخدمات الـ 9">
           <View style={styles.grid}>
             {NINE_SERVICE_CATEGORIES.map((cat) => (
@@ -220,12 +221,33 @@ export function ServicesScreen() {
 
 const styles = StyleSheet.create({
   screenContainer: { flex: 1, backgroundColor: '#FAF5EE' },
-  content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 5 },
-  headerRow: {
+  content: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 5 },
+  fixedHeader: {
     flexDirection: rtlFlexDirection,
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FAF5EE',
+    borderBottomWidth: 0,
+    zIndex: 10,
+  },
+  headerTitlesBox: {
+    gap: 2,
+    flex: 1,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0F172A',
+    textAlign: rtlTextAlign,
+    writingDirection: 'rtl',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: rtlTextAlign,
+    writingDirection: 'rtl',
   },
   reportsBannerCard: {
     backgroundColor: '#FFFFFF',
@@ -302,25 +324,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
-  },
-  headerTextCol: {
-    flex: 1,
-    alignItems: 'stretch',
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
-    textAlign: rtlTextAlign,
-    writingDirection: 'rtl',
-    width: '100%',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    textAlign: rtlTextAlign,
-    writingDirection: 'rtl',
-    width: '100%',
   },
   addBtn: {
     flexDirection: rtlFlexDirection,

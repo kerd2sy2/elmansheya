@@ -998,6 +998,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                         "id": uid,
                         "full_name": acc.get('FullName') or "مواطن",
                         "phone": clean_phone,
+                        "birth_date": acc.get('BirthDate') or acc.get('birth_date') or "",
                         "role": role,
                         "role_name_ar": acc.get('RoleNameAr') or "المواطن",
                         "verification_status": acc.get('VerificationStatus') or "verified",

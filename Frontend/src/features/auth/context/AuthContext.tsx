@@ -62,6 +62,7 @@ interface AuthContextValue {
     full_name?: string;
     area?: string;
     avatar_url?: string;
+    birth_date?: string;
   }) => void;
   toggleBiometric: (enabled: boolean) => void;
   updateVerificationStatus: (status: VerificationStatusType) => void;
@@ -356,6 +357,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     full_name?: string;
     area?: string;
     avatar_url?: string;
+    birth_date?: string;
   }) => {
     if (!user) return;
     const updated: AuthenticatedUser = {
@@ -368,6 +370,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updates.area !== undefined
           ? updates.area.trim() || user.area
           : user.area,
+      birth_date:
+        updates.birth_date !== undefined
+          ? updates.birth_date.trim() || user.birth_date
+          : user.birth_date,
       avatar_url:
         updates.avatar_url !== undefined
           ? updates.avatar_url

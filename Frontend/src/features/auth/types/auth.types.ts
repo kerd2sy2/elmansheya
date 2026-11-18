@@ -10,6 +10,7 @@ export interface AuthenticatedUser {
   full_name: string;
   phone: string;
   email?: string;
+  birth_date?: string;
   area: string;
   role: string;
   role_name_ar: string;

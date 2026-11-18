@@ -241,6 +241,7 @@ export function ProfileScreen() {
 
   const [editName, setEditName] = useState<string>(user?.full_name ?? '');
   const [editArea, setEditArea] = useState<string>(user?.area ?? '');
+  const [editBirthDate, setEditBirthDate] = useState<string>(user?.birth_date ?? '');
 
   if (!user) {
     return null;
@@ -365,7 +366,7 @@ export function ProfileScreen() {
       Alert.alert('تنبيه', 'برجاء كتابة الاسم الكامل');
       return;
     }
-    updateProfile({ full_name: editName, area: editArea });
+    updateProfile({ full_name: editName, area: editArea, birth_date: editBirthDate });
     setShowEditModal(false);
   };
 
@@ -699,6 +700,7 @@ export function ProfileScreen() {
             onPress={() => {
               setEditName(user.full_name);
               setEditArea(user.area);
+              setEditBirthDate(user.birth_date ?? '');
               setShowEditModal(true);
             }}>
             <View style={styles.actionIconCircle}>
@@ -726,7 +728,7 @@ export function ProfileScreen() {
           </Pressable>
         </View>
 
-        {/* كرت البيانات الشخصية (الهاتف والعنوان) بنمط تيليجرام */}
+        {/* كرت البيانات الشخصية (الهاتف وتاريخ الميلاد والعنوان) بنمط تيليجرام */}
         <View style={styles.infoCard}>
           {/* رقم الهاتف */}
           <View style={styles.infoRow}>
@@ -736,6 +738,19 @@ export function ProfileScreen() {
             <View style={styles.infoTextCol}>
               <Text style={styles.infoFieldLabel}>رقم الهاتف</Text>
               <Text style={styles.infoMainValue}>{user.phone}</Text>
+            </View>
+          </View>
+
+          <View style={styles.cardDivider} />
+
+          {/* تاريخ الميلاد */}
+          <View style={styles.infoRow}>
+            <View style={styles.infoIconBox}>
+              <Ionicons name="calendar-outline" size={19} color="#973c00" />
+            </View>
+            <View style={styles.infoTextCol}>
+              <Text style={styles.infoFieldLabel}>تاريخ الميلاد</Text>
+              <Text style={styles.infoMainValue}>{user.birth_date || 'غير مسجل'}</Text>
             </View>
           </View>
 
@@ -973,6 +988,16 @@ export function ProfileScreen() {
                 value={editName}
                 onChangeText={setEditName}
                 placeholder="اكتب اسمك الثلاثي أو الرباعي"
+                placeholderTextColor="#94A3B8"
+                textAlign="right"
+              />
+
+              <Text style={styles.sheetInputLabel}>تاريخ الميلاد</Text>
+              <TextInput
+                style={styles.sheetInput}
+                value={editBirthDate}
+                onChangeText={setEditBirthDate}
+                placeholder="مثال: 15/08/1995"
                 placeholderTextColor="#94A3B8"
                 textAlign="right"
               />

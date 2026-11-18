@@ -744,14 +744,15 @@ export function ReportsScreen() {
       {/* هيدر الصفحة الرئيسي الثابت (Fixed Sticky Header) */}
       <View style={styles.fixedHeader}>
         <View style={styles.headerTitlesBox}>
-          <Text style={styles.title}>بلاغات القرية</Text>
+          <Text style={styles.title}>البلاغات</Text>
           <Text style={styles.headerSubtitle}>متابعة البلاغات والخدمات الميدانية</Text>
         </View>
         <Pressable
-          style={styles.headerAddBtn}
-          onPress={() => setCurrentView('create')}>
-          <Ionicons name="add-circle" size={17} color="#FFFFFF" />
-          <Text style={styles.headerAddBtnText}>تقديم بلاغ</Text>
+          style={styles.headerAddIconBtn}
+          onPress={() => setCurrentView('create')}
+          accessibilityLabel="إضافة بلاغ جديد"
+          hitSlop={8}>
+          <Ionicons name="add" size={24} color="#FFFFFF" />
         </Pressable>
       </View>
 
@@ -904,24 +905,18 @@ const styles = StyleSheet.create({
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
   },
-  headerAddBtn: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    gap: 6,
+  headerAddIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#973c00',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#973c00',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.22,
     shadowRadius: 6,
     elevation: 4,
-  },
-  headerAddBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13.5,
-    fontWeight: '800',
   },
   reportsHeaderInfo: {
     marginBottom: 12,
