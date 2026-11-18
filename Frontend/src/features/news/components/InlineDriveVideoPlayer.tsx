@@ -92,7 +92,7 @@ function NativeExoPlayerView({
   const { useVideoPlayer, VideoView } = ExpoVideoModule;
 
   // صامت افتراضياً عند التصفح السريع لتجنب إزعاج المستخدم
-  const [isMuted, setIsMuted] = useState<boolean>(true);
+  const [isMuted, setIsMuted] = useState<boolean>(() => Boolean(player?.muted ?? true));
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [manuallyPaused, setManuallyPaused] = useState<boolean>(false);
 
@@ -147,7 +147,9 @@ function NativeExoPlayerView({
       setIsPlaying(Boolean(ev.isPlaying));
     });
     const subMuted = player.addListener?.('mutedChange', (ev: any) => {
-      setIsMuted(Boolean(ev.isMuted));
+      const actualMuted =
+        typeof ev?.muted === 'boolean' ? ev.muted : Boolean(player?.muted);
+      setIsMuted(actualMuted);
     });
     const subTrack = player.addListener?.('videoTrackChange', (ev: any) => {
       const size = ev.videoTrack?.size;
@@ -279,13 +281,16 @@ function NativeExoPlayerView({
       {/* زر كتم وفتح الصوت: محمي تماماً من إيقاف الفيديو وبدون أي نصوص تظهر على الشاشة */}
       <View style={styles.controlsBottomRow} pointerEvents="box-none">
         <Pressable
-          style={styles.circleControlBtn}
+          style={[
+            styles.circleControlBtn,
+            !isMuted && styles.circleControlBtnActive,
+          ]}
           onPressIn={() => {
             mutePressTimeRef.current = Date.now();
           }}
           onPress={handleToggleMute}
           hitSlop={12}
-          accessibilityLabel="كتم أو تشغيل الصوت">
+          accessibilityLabel={isMuted ? 'تشغيل الصوت' : 'كتم الصوت'}>
           <Ionicons
             name={isMuted ? 'volume-mute' : 'volume-high'}
             size={18}
@@ -695,5 +700,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  circleControlBtnActive: {
+    backgroundColor: 'rgba(151, 60, 0, 0.88)',
+    borderColor: '#973c00',
   },
 });
