@@ -29,6 +29,7 @@ import { WelcomeOnboarding } from '../components/WelcomeOnboarding';
 import { useAuth } from '../context/AuthContext';
 
 const ONBOARDING_SEEN_KEY = 'elmansheya_has_seen_onboarding_v1';
+const OTP_BACKOFF_STORAGE_KEY = 'elmansheya_otp_backoff_v1';
 
 interface CountryDialOption {
   code: string;
@@ -69,9 +70,11 @@ export function LoginScreen() {
   const [phone, setPhone] = useState<string>('');
   const [showCountryPicker, setShowCountryPicker] = useState<boolean>(false);
 
-  // رمز التحقق
+  // رمز التحقق ومؤقت إعادة الإرسال المتصاعد (1، 2، 4، 8، 16 دقيقة...)
   const [otpCode, setOtpCode] = useState<string>('');
-  const [resendTimer, setResendTimer] = useState<number>(60);
+  const [otpAttemptCount, setOtpAttemptCount] = useState<number>(0);
+  const [cooldownEndTime, setCooldownEndTime] = useState<number>(0);
+  const [resendTimer, setResendTimer] = useState<number>(0);
 
   // بيانات المواطن الجديد
   const [newFullName, setNewFullName] = useState<string>('');
@@ -97,19 +100,50 @@ export function LoginScreen() {
         setHasSeenOnboarding(Boolean(data?.seen));
       }
     });
+    getSecureItem<{ attemptCount?: number; cooldownEndTime?: number }>(
+      OTP_BACKOFF_STORAGE_KEY
+    ).then((data) => {
+      if (!active || !data) return;
+      setOtpAttemptCount(data.attemptCount || 0);
+      if (data.cooldownEndTime && data.cooldownEndTime > Date.now()) {
+        setCooldownEndTime(data.cooldownEndTime);
+        setResendTimer(Math.ceil((data.cooldownEndTime - Date.now()) / 1000));
+      }
+    });
     return () => {
       active = false;
     };
   }, []);
 
-  // مؤقت إعادة إرسال الرمز
+  // مؤقت إعادة إرسال الرمز محسوباً من وقت الانتهاء الفعلي
   useEffect(() => {
-    if (step !== 'otp' || resendTimer <= 0) return;
-    const timer = setInterval(() => {
-      setResendTimer((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
+    if (cooldownEndTime <= Date.now()) {
+      if (resendTimer !== 0) setResendTimer(0);
+      return;
+    }
+    const updateRemaining = () => {
+      const rem = Math.max(0, Math.ceil((cooldownEndTime - Date.now()) / 1000));
+      setResendTimer(rem);
+    };
+    updateRemaining();
+    const timer = setInterval(updateRemaining, 1000);
     return () => clearInterval(timer);
-  }, [step, resendTimer]);
+  }, [cooldownEndTime]);
+
+  const formatResendWait = (sec: number): string => {
+    if (sec < 60) {
+      return `${sec} ثانية`;
+    }
+    const mins = Math.floor(sec / 60);
+    const remSec = sec % 60;
+    if (remSec === 0) {
+      if (mins === 1) return 'دقيقة واحدة';
+      if (mins === 2) return 'دقيقتين';
+      if (mins <= 10) return `${mins} دقائق`;
+      return `${mins} دقيقة`;
+    }
+    return `${mins}:${String(remSec).padStart(2, '0')} دقيقة`;
+  };
 
   // لصق آمن من الحافظة دون التسبب في أخطاء إذا لم يكن ExpoClipboard مضمناً في العميل
   const handlePasteFromClipboard = async () => {
@@ -197,6 +231,10 @@ export function LoginScreen() {
   };
 
   const handleSendWhatsAppOtp = async () => {
+    if (resendTimer > 0 && step === 'otp') {
+      return;
+    }
+
     Keyboard.dismiss();
     setErrorText(null);
 
@@ -227,8 +265,20 @@ export function LoginScreen() {
         return;
       }
 
+      // مضاعفة مدة الانتظار في كل مرة بدون تفعيل: 1، 2، 4، 8، 16 دقيقة...
+      const cooldownSeconds = 60 * Math.pow(2, otpAttemptCount);
+      const nextAttemptCount = otpAttemptCount + 1;
+      const nextEndTime = Date.now() + cooldownSeconds * 1000;
+
       setOtpCode('');
-      setResendTimer(60);
+      setOtpAttemptCount(nextAttemptCount);
+      setCooldownEndTime(nextEndTime);
+      setResendTimer(cooldownSeconds);
+      await setSecureItem(OTP_BACKOFF_STORAGE_KEY, {
+        attemptCount: nextAttemptCount,
+        cooldownEndTime: nextEndTime,
+      });
+
       setStep('otp');
       setTimeout(() => otpInputRef.current?.focus(), 250);
     } catch {
@@ -259,6 +309,12 @@ export function LoginScreen() {
         setSubmitting(false);
         return;
       }
+
+      // تصفير عداد المضاعفة بمجرد نجاح التحقق
+      setOtpAttemptCount(0);
+      setCooldownEndTime(0);
+      setResendTimer(0);
+      await setSecureItem(OTP_BACKOFF_STORAGE_KEY, null);
 
       if (res.is_registered && res.data?.user) {
         await loginWithDirectUser(res.data.user, res.data.refresh_token);
@@ -462,21 +518,21 @@ export function LoginScreen() {
             ) : null}
 
             {/* =====================================================
-                الخطوة 2: شاشة رمز التحقق (4 خانات مستقلة LTR + لصق سريع)
+                الخطوة 2: شاشة رمز التحقق (4 خانات مستقلة LTR)
                 ===================================================== */}
             {step === 'otp' ? (
               <View style={styles.stepBody}>
-                <Text style={styles.cardTitle}>تأكيد رمز التحقق</Text>
-                <Text style={styles.cardSubtitle}>
-                  أدخل الرمز المكون من 4 أرقام المرسل إلى الواتساب على الرقم
-                </Text>
-
-                <View style={styles.targetPhonePill}>
-                  <Ionicons name="logo-whatsapp" size={16} color="#16A34A" />
-                  <Text style={styles.targetPhoneText}>
+                <View style={styles.otpHeaderRow}>
+                  <Text style={styles.otpTitleInline} numberOfLines={1}>
+                    تأكيد رمز التحقق لرقم
+                  </Text>
+                  <Text style={styles.otpPhoneInline} numberOfLines={1}>
                     {getFullInternationalPhone()}
                   </Text>
                 </View>
+                <Text style={styles.cardSubtitle}>
+                  أدخل الرمز المكون من 4 أرقام المرسل عبر واتساب
+                </Text>
 
                 {/* 4 خانات منفصلة باتجاه LTR متفاعل مع الإدخال */}
                 <Pressable
@@ -525,21 +581,6 @@ export function LoginScreen() {
 
                 <Pressable
                   style={({ pressed }) => [
-                    styles.pasteBtn,
-                    pressed && { opacity: 0.8 },
-                  ]}
-                  onPress={handlePasteFromClipboard}
-                  hitSlop={8}>
-                  <Ionicons
-                    name="clipboard-outline"
-                    size={16}
-                    color={APP_THEME.primary}
-                  />
-                  <Text style={styles.pasteBtnText}>لصق الرمز</Text>
-                </Pressable>
-
-                <Pressable
-                  style={({ pressed }) => [
                     styles.primaryBtn,
                     (otpCode.length < 4 || submitting) && styles.primaryBtnDisabled,
                     pressed && styles.primaryBtnPressed,
@@ -556,7 +597,7 @@ export function LoginScreen() {
                 <View style={styles.resendWrap}>
                   {resendTimer > 0 ? (
                     <Text style={styles.resendTimerText}>
-                      يمكنك إعادة إرسال الرمز خلال {resendTimer} ثانية
+                      يمكنك إعادة إرسال الرمز خلال {formatResendWait(resendTimer)}
                     </Text>
                   ) : (
                     <Pressable onPress={handleSendWhatsAppOtp} hitSlop={8}>
@@ -991,33 +1032,31 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#64748B',
   },
-  targetPhonePill: {
-    direction: 'ltr',
-    flexDirection: 'row',
+  otpHeaderRow: {
+    flexDirection: rtlFlexDirection,
     alignItems: 'center',
-    alignSelf: 'center',
+    justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    marginBottom: 22,
-    marginTop: -10,
+    marginBottom: 6,
+    width: '100%',
   },
-  targetPhoneText: {
-    fontSize: 14.5,
+  otpTitleInline: {
+    fontSize: 16.5,
     fontWeight: '800',
-    color: '#166534',
-    letterSpacing: 0.5,
+    color: '#0F172A',
+  },
+  otpPhoneInline: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: APP_THEME.primary,
+    writingDirection: 'ltr',
   },
   otpCellsWrapper: {
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    marginBottom: 16,
+    marginBottom: 22,
   },
   otpCellsRow: {
     direction: 'ltr',
@@ -1058,24 +1097,6 @@ const styles = StyleSheet.create({
     left: 0,
     opacity: 0.015,
     fontSize: 24,
-  },
-  pasteBtn: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    alignSelf: 'center',
-    gap: 6,
-    backgroundColor: APP_THEME.primaryLight,
-    borderWidth: 1,
-    borderColor: APP_THEME.primaryBorder,
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginBottom: 20,
-  },
-  pasteBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: APP_THEME.primary,
   },
   resendWrap: {
     marginTop: 18,
