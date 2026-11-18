@@ -23,6 +23,12 @@ PENDING_VERIFICATIONS = {}
 VERIFIED_DEVICES = {}
 PENDING_OTPS = {}
 OTP_COOLDOWNS = {}
+
+def record_otp_send_attempt(rate_key):
+    rl = OTP_COOLDOWNS.setdefault(rate_key, {"send_count": 0, "send_blocked_until": 0, "verify_blocked_until": 0})
+    rl["send_count"] += 1
+    if rl["send_count"] >= 3:
+        rl["send_blocked_until"] = time.time() + 300
 GATEWAY_PHONE_NUMBER = os.environ.get('SMS_GATEWAY_PHONE', '+201550888841')
 SUPERVISOR_WHATSAPP_NUMBER = os.environ.get('SUPERVISOR_WHATSAPP', '+201550888841')
 
@@ -389,12 +395,17 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     self.send_json({"success": False, "error": "يرجى إدخال رقم هاتف صحيح"}, 400)
                     return
 
-                # فحص مدة الانتظار التصاعدية على السيرفر لهذا الرقم لمنع الالتفاف على الكود
-                cd = OTP_COOLDOWNS.get(clean_phone)
-                if cd and time.time() < cd.get('cooldown_until', 0):
-                    rem = int(cd['cooldown_until'] - time.time()) + 1
-                    self.send_json({"success": False, "error": f"يرجى الانتظار {rem} ثانية قبل طلب رمز جديد لهذا الرقم"}, 429)
+                # فحص دورة 3 محاولات ثم حظر 5 دقائق ثم إعادة فتح 3 محاولات جديدة
+                rate_key = device_fp or clean_phone
+                rl = OTP_COOLDOWNS.setdefault(rate_key, {"send_count": 0, "send_blocked_until": 0, "verify_blocked_until": 0})
+                now_ts = time.time()
+                if now_ts < rl.get("send_blocked_until", 0):
+                    rem = int(rl["send_blocked_until"] - now_ts) + 1
+                    self.send_json({"success": False, "error": f"تم إيقاف الإرسال مؤقتاً لمدة 5 دقائق بعد 3 محاولات. يرجى الانتظار {rem} ثانية"}, 429)
                     return
+                if rl.get("send_blocked_until", 0) > 0 and now_ts >= rl["send_blocked_until"]:
+                    rl["send_count"] = 0
+                    rl["send_blocked_until"] = 0
 
                 # توليد كود مكون من 4 أرقام
                 code = f"{secrets.randbelow(9000) + 1000}"
@@ -415,12 +426,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     wa_res = urllib.request.urlopen(wa_req, timeout=10)
                     wa_data = json.loads(wa_res.read().decode('utf-8'))
                     if wa_data.get('success'):
-                        attempt_count = cd.get('attempt_count', 0) if cd else 0
-                        cooldown_sec = 60 * (2 ** attempt_count)
-                        OTP_COOLDOWNS[clean_phone] = {
-                            "attempt_count": attempt_count + 1,
-                            "cooldown_until": time.time() + cooldown_sec
-                        }
+                        record_otp_send_attempt(rate_key)
                         self.send_json({
                             "success": True,
                             "message": "تم إرسال كود الدخول إلى رقم واتساب الخاص بك",
@@ -446,12 +452,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 except Exception as wa_err:
                     print('[WhatsApp service error]', wa_err)
                     # إذا كانت خدمة الواتساب غير مشغلة محلياً، نرجع الكود في الرد لأغراض الاختبار مع تطبيق مدة الانتظار
-                    attempt_count = cd.get('attempt_count', 0) if cd else 0
-                    cooldown_sec = 60 * (2 ** attempt_count)
-                    OTP_COOLDOWNS[clean_phone] = {
-                        "attempt_count": attempt_count + 1,
-                        "cooldown_until": time.time() + cooldown_sec
-                    }
+                    record_otp_send_attempt(rate_key)
                     self.send_json({
                         "success": True,
                         "message": "كود التحقق الخاص بك هو: " + code,
@@ -477,6 +478,16 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 elif clean_phone.startswith('966') and len(clean_phone) >= 12:
                     clean_phone = '0' + clean_phone[3:]
 
+                rate_key = device_fp or clean_phone
+                rl = OTP_COOLDOWNS.setdefault(rate_key, {"send_count": 0, "send_blocked_until": 0, "verify_blocked_until": 0})
+                now_ts = time.time()
+                if now_ts < rl.get("verify_blocked_until", 0):
+                    rem = int(rl["verify_blocked_until"] - now_ts) + 1
+                    self.send_json({"success": False, "error": f"تم إيقاف المحاولات لمدة 5 دقائق بعد 3 محاولات خاطئة. يرجى الانتظار {rem} ثانية"}, 429)
+                    return
+                if rl.get("verify_blocked_until", 0) > 0 and now_ts >= rl["verify_blocked_until"]:
+                    rl["verify_blocked_until"] = 0
+
                 item = PENDING_OTPS.get(clean_phone)
                 # فحص وجود الكود وصلاحيته ثم تتبع محاولات الإدخال الخاطئة
                 if not item or time.time() > item.get('expires_at', 0):
@@ -489,14 +500,17 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     item['wrong_attempts'] = item.get('wrong_attempts', 0) + 1
                     if item['wrong_attempts'] >= 3:
                         del PENDING_OTPS[clean_phone]
-                        self.send_json({"success": False, "error": "تم إدخال رمز خاطئ 3 مرات. يرجى طلب رمز جديد"}, 400)
+                        block_until = time.time() + 300
+                        rl["verify_blocked_until"] = block_until
+                        rl["send_blocked_until"] = block_until
+                        self.send_json({"success": False, "error": "تم إدخال رمز خاطئ 3 مرات. تم إيقاف المحاولات لمدة 5 دقائق"}, 400)
                         return
                     self.send_json({"success": False, "error": "كود التحقق غير صحيح أو انتهت صلاحيته"}, 400)
                     return
 
                 # مسح الكود والانتظار بعد الاستخدام بنجاح
                 del PENDING_OTPS[clean_phone]
-                OTP_COOLDOWNS.pop(clean_phone, None)
+                OTP_COOLDOWNS.pop(rate_key, None)
 
                 # فحص هل المستخدم مسجل مسبقاً
                 db = load_json(ACCOUNTS_FILE)
