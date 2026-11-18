@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getSecureItem, setSecureItem } from '@/core/auth-storage/sessionStorage';
 import { getCompositeDeviceFingerprint } from '@/core/security/deviceFingerprint';
+import { APP_THEME } from '@/core/theme/colors';
 import {
   sendWhatsAppOtp,
   verifyWhatsAppOtp,
@@ -33,7 +34,7 @@ export function LoginScreen() {
   // حالة شاشات الترحيب
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
 
-  // مرحلة تسجيل الدخول (صفحة كاملة مخصصة)
+  // مرحلة تسجيل الدخول
   const [step, setStep] = useState<AuthStep>('phone');
 
   // المفتاح وكود الدولة (الافتراضي مصر +20)
@@ -83,7 +84,7 @@ export function LoginScreen() {
     };
   }, [step, resendTimer]);
 
-  // لصق آمن من الحافظة دون أي أخطاء
+  // لصق آمن من الحافظة
   const handlePasteFromClipboard = async () => {
     try {
       let text = '';
@@ -294,7 +295,7 @@ export function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* شريط علوي أنيق مع زر الرجوع */}
+          {/* شريط علوي أنيق بلون التيراكوتا الفاتح */}
           <View style={styles.topBar}>
             {step !== 'phone' ? (
               <Pressable
@@ -306,13 +307,13 @@ export function LoginScreen() {
                 }}
                 hitSlop={12}
               >
-                <Ionicons name="arrow-forward" size={22} color="#f8fafc" />
+                <Ionicons name="arrow-forward" size={20} color={APP_THEME.primary} />
                 <Text style={styles.backButtonText}>رجوع</Text>
               </Pressable>
             ) : (
               <View style={styles.headerPill}>
-                <View style={styles.greenPulse} />
-                <Text style={styles.headerPillText}>بوابة الدخول الآمنة</Text>
+                <Ionicons name="shield-checkmark" size={14} color={APP_THEME.primary} />
+                <Text style={styles.headerPillText}>بوابة الدخول الرسمية</Text>
               </View>
             )}
 
@@ -321,7 +322,7 @@ export function LoginScreen() {
               style={styles.tourLink}
               hitSlop={8}
             >
-              <Ionicons name="information-circle-outline" size={16} color="#38bdf8" />
+              <Ionicons name="sparkles-outline" size={16} color={APP_THEME.primary} />
               <Text style={styles.tourLinkText}>جولة التطبيق</Text>
             </Pressable>
           </View>
@@ -329,23 +330,24 @@ export function LoginScreen() {
           {/* تنبيه الخطأ */}
           {Boolean(errorText) && (
             <View style={styles.errorBanner}>
-              <Ionicons name="alert-circle" size={20} color="#ef4444" />
+              <Ionicons name="alert-circle" size={18} color="#DC2626" />
               <Text style={styles.errorText}>{errorText}</Text>
             </View>
           )}
 
           {/* ===================================================
-              المرحلة الأولى: صفحة إدخال رقم الهاتف المخصصة
+              المرحلة الأولى: صفحة إدخال رقم الهاتف المخصصة (White Mode)
              =================================================== */}
           {step === 'phone' && (
             <View style={styles.pageCard}>
-              <View style={styles.iconCircle}>
-                <Ionicons name="phone-portrait-outline" size={40} color="#22c55e" />
+              {/* شارة اللوجو التيراكوتا */}
+              <View style={styles.logoBadge}>
+                <Ionicons name="phone-portrait" size={36} color={APP_THEME.primary} />
               </View>
 
               <Text style={styles.titleText}>تسجيل الدخول برقم الهاتف</Text>
               <Text style={styles.descText}>
-                أدخل رقم هاتفك ليصلك كود التحقق السري فوراً على الواتساب للدخول المباشر.
+                أدخل رقم هاتفك ليصلك كود التحقق السري فوراً على الواتساب وبدون أي رسوم.
               </Text>
 
               {/* بطاقة إدخال المفتاح والرقم */}
@@ -373,7 +375,7 @@ export function LoginScreen() {
                     value={phone}
                     onChangeText={handlePhoneChange}
                     placeholder={dialCode === '+20' ? '01012345678' : '501234567'}
-                    placeholderTextColor="#64748b"
+                    placeholderTextColor="#94A3B8"
                     keyboardType="phone-pad"
                     maxLength={15}
                     textAlign="right"
@@ -446,7 +448,7 @@ export function LoginScreen() {
                 </View>
               )}
 
-              {/* زر الإرسال */}
+              {/* زر الإرسال المعتمد بهوية المنشية التيراكوتا والواتساب */}
               <Pressable
                 style={[
                   styles.primaryButton,
@@ -456,10 +458,10 @@ export function LoginScreen() {
                 disabled={!phone.trim() || submitting}
               >
                 {submitting ? (
-                  <ActivityIndicator color="#ffffff" />
+                  <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <>
-                    <Ionicons name="logo-whatsapp" size={20} color="#ffffff" />
+                    <Ionicons name="logo-whatsapp" size={20} color="#FFFFFF" />
                     <Text style={styles.primaryButtonText}>
                       إرسال كود الدخول عبر واتساب 💬
                     </Text>
@@ -468,7 +470,7 @@ export function LoginScreen() {
               </Pressable>
 
               <View style={styles.privacyNote}>
-                <Ionicons name="shield-checkmark-outline" size={16} color="#64748b" />
+                <Ionicons name="lock-closed" size={14} color="#64748B" />
                 <Text style={styles.privacyNoteText}>
                   خدمة مجانية بالكامل لأهالي المنشية لحماية خصوصية بياناتك
                 </Text>
@@ -477,17 +479,17 @@ export function LoginScreen() {
           )}
 
           {/* ===================================================
-              المرحلة الثانية: صفحة كود التحقق 4 أرقام المخصصة
+              المرحلة الثانية: صفحة كود التحقق 4 أرقام المخصصة (White Mode)
              =================================================== */}
           {step === 'otp' && (
             <View style={styles.pageCard}>
-              <View style={styles.iconCircle}>
-                <Ionicons name="chatbubbles-outline" size={40} color="#38bdf8" />
+              <View style={styles.logoBadge}>
+                <Ionicons name="chatbubbles" size={36} color={APP_THEME.primary} />
               </View>
 
-              <Text style={styles.titleText}>أدخل كود التحقق</Text>
+              <Text style={styles.titleText}>أدخل رمز التحقق</Text>
               <Text style={styles.descText}>
-                تم إرسال كود سري إلى واتساب الرقم:{'\n'}
+                تم إرسال كود سري مكون من 4 أرقام إلى واتساب الرقم:{'\n'}
                 <Text style={styles.phoneBadgeText}>
                   {getFullInternationalPhone()}
                 </Text>
@@ -510,7 +512,7 @@ export function LoginScreen() {
                   keyboardType="number-pad"
                   maxLength={4}
                   placeholder="••••"
-                  placeholderTextColor="#475569"
+                  placeholderTextColor="#CBD5E1"
                   textAlign="center"
                   autoFocus
                 />
@@ -521,7 +523,7 @@ export function LoginScreen() {
                   onPress={handlePasteFromClipboard}
                   hitSlop={8}
                 >
-                  <Ionicons name="clipboard-outline" size={16} color="#38bdf8" />
+                  <Ionicons name="clipboard-outline" size={16} color={APP_THEME.primary} />
                   <Text style={styles.pasteActionBtnText}>
                     لصق الكود المنسوخ من واتساب 📋
                   </Text>
@@ -538,10 +540,10 @@ export function LoginScreen() {
                 disabled={otpCode.length < 4 || submitting}
               >
                 {submitting ? (
-                  <ActivityIndicator color="#ffffff" />
+                  <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <>
-                    <Ionicons name="checkmark-circle-outline" size={20} color="#ffffff" />
+                    <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
                     <Text style={styles.primaryButtonText}>تأكيد ومتابعة ✅</Text>
                   </>
                 )}
@@ -575,12 +577,12 @@ export function LoginScreen() {
           )}
 
           {/* ===================================================
-              المرحلة الثالثة: صفحة بيانات المواطن الجديد
+              المرحلة الثالثة: صفحة بيانات المواطن الجديد (White Mode)
              =================================================== */}
           {step === 'register_details' && (
             <View style={styles.pageCard}>
-              <View style={styles.iconCircle}>
-                <Ionicons name="person-add-outline" size={40} color="#f59e0b" />
+              <View style={styles.logoBadge}>
+                <Ionicons name="person-add" size={36} color={APP_THEME.primary} />
               </View>
 
               <Text style={styles.titleText}>أهلاً بك في عائلة المنشية! 🎉</Text>
@@ -590,7 +592,7 @@ export function LoginScreen() {
 
               {/* شارة الرقم الموثق */}
               <View style={styles.phoneVerifiedBadge}>
-                <Ionicons name="checkmark-done" size={18} color="#22c55e" />
+                <Ionicons name="shield-checkmark" size={18} color="#047857" />
                 <Text style={styles.phoneVerifiedBadgeText}>
                   الرقم الموثق: {getFullInternationalPhone()}
                 </Text>
@@ -603,7 +605,7 @@ export function LoginScreen() {
                   ref={nameInputRef}
                   style={styles.formInput}
                   placeholder="مثال: أحمد محمد عبد الله"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor="#94A3B8"
                   value={newFullName}
                   onChangeText={setNewFullName}
                   textAlign="right"
@@ -619,7 +621,7 @@ export function LoginScreen() {
                     <TextInput
                       style={styles.dateField}
                       placeholder="1995"
-                      placeholderTextColor="#64748b"
+                      placeholderTextColor="#94A3B8"
                       keyboardType="number-pad"
                       maxLength={4}
                       value={newBirthYear}
@@ -633,7 +635,7 @@ export function LoginScreen() {
                     <TextInput
                       style={styles.dateField}
                       placeholder="05"
-                      placeholderTextColor="#64748b"
+                      placeholderTextColor="#94A3B8"
                       keyboardType="number-pad"
                       maxLength={2}
                       value={newBirthMonth}
@@ -647,7 +649,7 @@ export function LoginScreen() {
                     <TextInput
                       style={styles.dateField}
                       placeholder="12"
-                      placeholderTextColor="#64748b"
+                      placeholderTextColor="#94A3B8"
                       keyboardType="number-pad"
                       maxLength={2}
                       value={newBirthDay}
@@ -664,7 +666,7 @@ export function LoginScreen() {
                 <TextInput
                   style={styles.formInput}
                   placeholder="مثال: بحري البلد / وسط البلد"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor="#94A3B8"
                   value={newArea}
                   onChangeText={setNewArea}
                   textAlign="right"
@@ -682,10 +684,10 @@ export function LoginScreen() {
                 disabled={!newFullName.trim() || !newBirthYear.trim() || submitting}
               >
                 {submitting ? (
-                  <ActivityIndicator color="#ffffff" />
+                  <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <>
-                    <Ionicons name="rocket-outline" size={20} color="#ffffff" />
+                    <Ionicons name="rocket" size={20} color="#FFFFFF" />
                     <Text style={styles.primaryButtonText}>
                       إتمام الدخول إلى الرئيسية 🚀
                     </Text>
@@ -703,7 +705,7 @@ export function LoginScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0a0f1d',
+    backgroundColor: '#FAF5EE', // ثيم المنشية الدافئ الوايت مود
   },
   keyboardView: {
     flex: 1,
@@ -711,8 +713,8 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 32,
+    paddingTop: 16,
+    paddingBottom: 36,
     alignItems: 'center',
   },
   topBar: {
@@ -720,44 +722,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 24,
+    marginBottom: 20,
     paddingHorizontal: 4,
   },
   headerPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: APP_THEME.primaryLight,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
-    gap: 8,
+    gap: 6,
     borderWidth: 1,
-    borderColor: '#334155',
-  },
-  greenPulse: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#22c55e',
+    borderColor: APP_THEME.primaryBorder,
   },
   headerPillText: {
-    color: '#94a3b8',
+    color: APP_THEME.primary,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 12,
     gap: 6,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
   },
   backButtonText: {
-    color: '#f8fafc',
+    color: APP_THEME.primary,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -767,62 +767,63 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   tourLinkText: {
-    color: '#38bdf8',
+    color: APP_THEME.primary,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   errorBanner: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: '#FEF2F2',
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: '#FCA5A5',
     borderRadius: 14,
-    padding: 14,
+    padding: 12,
     width: '100%',
-    marginBottom: 20,
+    marginBottom: 16,
     gap: 10,
   },
   errorText: {
-    color: '#fca5a5',
+    color: '#B91C1C',
     fontSize: 13,
     flex: 1,
     textAlign: 'right',
+    fontWeight: '600',
   },
   pageCard: {
     width: '100%',
     maxWidth: 440,
-    backgroundColor: '#131d33',
+    backgroundColor: '#FFFFFF',
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#E2E8F0',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
   },
-  iconCircle: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: '#1e293b',
+  logoBadge: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: APP_THEME.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#334155',
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: APP_THEME.primaryBorder,
   },
   titleText: {
-    color: '#f8fafc',
+    color: '#0F172A',
     fontSize: 22,
     fontWeight: '800',
     textAlign: 'center',
     marginBottom: 8,
   },
   descText: {
-    color: '#94a3b8',
+    color: '#475569',
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 22,
@@ -830,27 +831,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   phoneBadgeText: {
-    color: '#38bdf8',
+    color: APP_THEME.primary,
     fontWeight: '800',
     fontSize: 16,
   },
   inputCard: {
     flexDirection: 'row',
     width: '100%',
-    backgroundColor: '#0a0f1d',
-    borderRadius: 18,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: '#25334d',
+    borderColor: '#CBD5E1',
     overflow: 'hidden',
     marginBottom: 16,
   },
   dialCodeCol: {
-    width: 95,
-    backgroundColor: '#1b263b',
+    width: 90,
+    backgroundColor: '#F1F5F9',
     paddingHorizontal: 8,
     paddingVertical: 10,
     borderRightWidth: 1.5,
-    borderRightColor: '#25334d',
+    borderRightColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -861,21 +862,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   inputSubLabel: {
-    color: '#64748b',
+    color: '#64748B',
     fontSize: 11,
     fontWeight: '700',
     marginBottom: 2,
     textAlign: 'center',
   },
   dialCodeInput: {
-    color: '#38bdf8',
+    color: APP_THEME.primary,
     fontSize: 18,
     fontWeight: '800',
     padding: 0,
     textAlign: 'center',
   },
   phoneInput: {
-    color: '#f8fafc',
+    color: '#0F172A',
     fontSize: 18,
     fontWeight: '700',
     paddingVertical: 4,
@@ -890,24 +891,24 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   countryChip: {
-    backgroundColor: '#1b263b',
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#25334d',
+    borderColor: '#E2E8F0',
   },
   countryChipActive: {
-    backgroundColor: '#0369a1',
-    borderColor: '#38bdf8',
+    backgroundColor: APP_THEME.primaryLight,
+    borderColor: APP_THEME.primary,
   },
   countryChipText: {
-    color: '#94a3b8',
+    color: '#475569',
     fontSize: 12,
     fontWeight: '600',
   },
   countryChipTextActive: {
-    color: '#ffffff',
+    color: APP_THEME.primary,
     fontWeight: '800',
   },
   carrierChipsRow: {
@@ -919,48 +920,48 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   carrierChip: {
-    backgroundColor: '#0a0f1d',
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#E2E8F0',
   },
   carrierChipActive: {
-    backgroundColor: '#15803d',
-    borderColor: '#22c55e',
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
   },
   carrierChipText: {
-    color: '#94a3b8',
+    color: '#64748B',
     fontSize: 11,
+    fontWeight: '600',
   },
   carrierChipTextActive: {
-    color: '#ffffff',
+    color: '#047857',
     fontWeight: '700',
   },
   primaryButton: {
     flexDirection: 'row',
-    backgroundColor: '#22c55e',
+    backgroundColor: APP_THEME.primary,
     width: '100%',
-    paddingVertical: 16,
-    borderRadius: 16,
+    paddingVertical: 15,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    shadowColor: '#22c55e',
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 4,
-    marginTop: 8,
+    shadowColor: APP_THEME.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3,
+    marginTop: 6,
   },
   buttonDisabled: {
-    backgroundColor: '#1e293b',
-    opacity: 0.6,
+    backgroundColor: '#CBD5E1',
     shadowOpacity: 0,
     elevation: 0,
   },
   primaryButtonText: {
-    color: '#ffffff',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
   },
@@ -971,8 +972,9 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   privacyNoteText: {
-    color: '#64748b',
+    color: '#64748B',
     fontSize: 12,
+    fontWeight: '500',
   },
   otpBoxWrapper: {
     width: '100%',
@@ -981,23 +983,23 @@ const styles = StyleSheet.create({
   },
   otpInputBox: {
     width: 240,
-    backgroundColor: '#0a0f1d',
+    backgroundColor: '#F8FAFC',
     borderWidth: 2,
-    borderColor: '#38bdf8',
+    borderColor: APP_THEME.primary,
     borderRadius: 18,
-    color: '#38bdf8',
+    color: '#0F172A',
     fontSize: 34,
     fontWeight: '900',
     letterSpacing: 18,
-    paddingVertical: 14,
+    paddingVertical: 12,
     textAlign: 'center',
   },
   pasteActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    backgroundColor: APP_THEME.primaryLight,
     borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.3)',
+    borderColor: APP_THEME.primaryBorder,
     borderRadius: 999,
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -1005,7 +1007,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   pasteActionBtnText: {
-    color: '#38bdf8',
+    color: APP_THEME.primary,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -1017,24 +1019,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   timerNotice: {
-    color: '#64748b',
+    color: '#64748B',
     fontSize: 13,
   },
   resendActiveText: {
-    color: '#22c55e',
+    color: APP_THEME.primary,
     fontSize: 13,
     fontWeight: '700',
   },
   editPhoneLink: {
-    color: '#38bdf8',
+    color: '#0284C7',
     fontSize: 13,
+    fontWeight: '600',
   },
   phoneVerifiedBadge: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    backgroundColor: '#ECFDF5',
     borderWidth: 1,
-    borderColor: 'rgba(34, 197, 94, 0.3)',
+    borderColor: '#A7F3D0',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
@@ -1042,7 +1045,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   phoneVerifiedBadgeText: {
-    color: '#4ade80',
+    color: '#047857',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -1051,21 +1054,21 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   formLabel: {
-    color: '#cbd5e1',
+    color: '#334155',
     fontSize: 13,
     fontWeight: '700',
     marginBottom: 8,
     textAlign: 'right',
   },
   formInput: {
-    backgroundColor: '#0a0f1d',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#25334d',
-    color: '#f8fafc',
-    fontSize: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    color: '#0F172A',
+    fontSize: 15,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
   },
   dateRow: {
     flexDirection: 'row',
@@ -1076,20 +1079,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dateHint: {
-    color: '#64748b',
+    color: '#64748B',
     fontSize: 11,
     marginBottom: 4,
     textAlign: 'center',
   },
   dateField: {
-    backgroundColor: '#0a0f1d',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#25334d',
-    color: '#f8fafc',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    color: '#0F172A',
     fontSize: 16,
-    fontWeight: '800',
-    paddingVertical: 12,
+    fontWeight: '700',
+    paddingVertical: 11,
     textAlign: 'center',
   },
 });
