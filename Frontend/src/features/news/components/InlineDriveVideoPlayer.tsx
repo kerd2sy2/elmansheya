@@ -294,7 +294,7 @@ function NativeExoPlayerView({
         </View>
       ) : null}
 
-      {/* شريط الأزرار السفلي: زر التكبير على اليسار وزر الصوت على اليمين */}
+      {/* شريط الأزرار السفلي: زر التكبير بجانب زر الصوت */}
       <View style={styles.controlsBottomRow} pointerEvents="box-none">
         {/* زر التكبير للشاشة الكاملة وعرض الفيديو بأبعاده الأصلية */}
         <Pressable
@@ -728,11 +728,10 @@ const styles = StyleSheet.create({
   controlsBottomRow: {
     position: 'absolute',
     bottom: 10,
-    left: 12,
     right: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
     zIndex: 20,
   },
   circleControlBtn: {
