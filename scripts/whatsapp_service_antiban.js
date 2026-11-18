@@ -117,12 +117,25 @@ app.post('/send-otp', async (req, res) => {
 
         const jid = `${clean}@s.whatsapp.net`;
 
+        // ٠. فحص مسبق عبر خوادم واتساب للتأكد أن الرقم مسجل فعلياً على واتساب لمنع حظر الحساب
+        const checkResults = await sock.onWhatsApp(jid);
+        const waUser = Array.isArray(checkResults) ? checkResults[0] : null;
+        if (!waUser || !waUser.exists) {
+            console.log(`[WhatsApp:send-otp] Number ${clean} is NOT registered on WhatsApp. Skipping send.`);
+            return res.status(400).json({
+                success: false,
+                not_on_whatsapp: true,
+                error: 'هذا الرقم غير مسجل على واتساب، يرجى التأكد من الرقم.'
+            });
+        }
+        const targetJid = waUser.jid || jid;
+
         // ١. محاكاة وجود بشري يكتب (composing) لتضليل فلاتر الروبوتات في واتساب
         try {
-            await sock.sendPresenceUpdate('composing', jid);
+            await sock.sendPresenceUpdate('composing', targetJid);
             const typingDelay = Math.floor(Math.random() * 800) + 1000; // 1.0 to 1.8 seconds
             await new Promise(r => setTimeout(r, typingDelay));
-            await sock.sendPresenceUpdate('paused', jid);
+            await sock.sendPresenceUpdate('paused', targetJid);
         } catch (presErr) {
             // تجاهل خطأ التواجد إن حدث
         }
@@ -131,9 +144,9 @@ app.post('/send-otp', async (req, res) => {
         const msgText = buildAntiBanOtpMessage(code);
 
         // ٣. إرسال الرسالة
-        const sent = await sock.sendMessage(jid, { text: msgText });
+        const sent = await sock.sendMessage(targetJid, { text: msgText });
         console.log(`[WhatsApp:send-otp] Sent unique code ${code} to ${clean}`);
-        res.json({ success: true, jid, messageId: sent.key.id });
+        res.json({ success: true, jid: targetJid, messageId: sent.key.id });
     } catch (err) {
         console.error('[WhatsApp:send-otp error]', err);
         res.status(500).json({ success: false, error: err.message });

@@ -22,6 +22,7 @@ UPSTREAM_URL = 'http://127.0.0.1:8082'
 PENDING_VERIFICATIONS = {}
 VERIFIED_DEVICES = {}
 PENDING_OTPS = {}
+OTP_COOLDOWNS = {}
 GATEWAY_PHONE_NUMBER = os.environ.get('SMS_GATEWAY_PHONE', '+201550888841')
 SUPERVISOR_WHATSAPP_NUMBER = os.environ.get('SUPERVISOR_WHATSAPP', '+201550888841')
 
@@ -388,6 +389,13 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     self.send_json({"success": False, "error": "يرجى إدخال رقم هاتف صحيح"}, 400)
                     return
 
+                # فحص مدة الانتظار التصاعدية على السيرفر لهذا الرقم لمنع الالتفاف على الكود
+                cd = OTP_COOLDOWNS.get(clean_phone)
+                if cd and time.time() < cd.get('cooldown_until', 0):
+                    rem = int(cd['cooldown_until'] - time.time()) + 1
+                    self.send_json({"success": False, "error": f"يرجى الانتظار {rem} ثانية قبل طلب رمز جديد لهذا الرقم"}, 429)
+                    return
+
                 # توليد كود مكون من 4 أرقام
                 code = f"{secrets.randbelow(9000) + 1000}"
                 PENDING_OTPS[clean_phone] = {
@@ -397,16 +405,22 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     "wrong_attempts": 0
                 }
 
-                # استدعاء خدمة الواتساب المحلية لإرسال الكود
+                # استدعاء خدمة الواتساب المحلية لإرسال الكود (مع الفحص المسبق onWhatsApp)
                 wa_req = urllib.request.Request(
                     'http://127.0.0.1:3005/send-otp',
-                    data=json.dumps({"phone": clean_phone, "code": code}).encode('utf-8'),
+                    data=json.dumps({"phone": phone or clean_phone, "code": code}).encode('utf-8'),
                     headers={'Content-Type': 'application/json'}
                 )
                 try:
-                    wa_res = urllib.request.urlopen(wa_req, timeout=8)
+                    wa_res = urllib.request.urlopen(wa_req, timeout=10)
                     wa_data = json.loads(wa_res.read().decode('utf-8'))
                     if wa_data.get('success'):
+                        attempt_count = cd.get('attempt_count', 0) if cd else 0
+                        cooldown_sec = 60 * (2 ** attempt_count)
+                        OTP_COOLDOWNS[clean_phone] = {
+                            "attempt_count": attempt_count + 1,
+                            "cooldown_until": time.time() + cooldown_sec
+                        }
                         self.send_json({
                             "success": True,
                             "message": "تم إرسال كود الدخول إلى رقم واتساب الخاص بك",
@@ -415,11 +429,29 @@ class GatewayHandler(BaseHTTPRequestHandler):
                         })
                         return
                     else:
+                        PENDING_OTPS.pop(clean_phone, None)
                         self.send_json({"success": False, "error": wa_data.get('error', 'تعذر إرسال رسالة الواتساب')}, 500)
                         return
+                except urllib.error.HTTPError as http_err:
+                    PENDING_OTPS.pop(clean_phone, None)
+                    err_body = http_err.read().decode('utf-8', errors='ignore')
+                    err_msg = 'تعذر إرسال رسالة الواتساب'
+                    try:
+                        err_json = json.loads(err_body)
+                        err_msg = err_json.get('error') or err_msg
+                    except Exception:
+                        pass
+                    self.send_json({"success": False, "error": err_msg}, http_err.code)
+                    return
                 except Exception as wa_err:
                     print('[WhatsApp service error]', wa_err)
-                    # إذا كانت خدمة الواتساب قيد الربط، نرجع الكود في الرد لأغراض الاختبار
+                    # إذا كانت خدمة الواتساب غير مشغلة محلياً، نرجع الكود في الرد لأغراض الاختبار مع تطبيق مدة الانتظار
+                    attempt_count = cd.get('attempt_count', 0) if cd else 0
+                    cooldown_sec = 60 * (2 ** attempt_count)
+                    OTP_COOLDOWNS[clean_phone] = {
+                        "attempt_count": attempt_count + 1,
+                        "cooldown_until": time.time() + cooldown_sec
+                    }
                     self.send_json({
                         "success": True,
                         "message": "كود التحقق الخاص بك هو: " + code,
@@ -462,8 +494,9 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     self.send_json({"success": False, "error": "كود التحقق غير صحيح أو انتهت صلاحيته"}, 400)
                     return
 
-                # مسح الكود بعد الاستخدام
+                # مسح الكود والانتظار بعد الاستخدام بنجاح
                 del PENDING_OTPS[clean_phone]
+                OTP_COOLDOWNS.pop(clean_phone, None)
 
                 # فحص هل المستخدم مسجل مسبقاً
                 db = load_json(ACCOUNTS_FILE)

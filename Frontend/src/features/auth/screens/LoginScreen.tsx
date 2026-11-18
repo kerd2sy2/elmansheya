@@ -72,6 +72,7 @@ export function LoginScreen() {
 
   // رمز التحقق ومؤقت إعادة الإرسال المتصاعد (1، 2، 4، 8، 16 دقيقة...)
   const [otpCode, setOtpCode] = useState<string>('');
+  const [lastSentPhone, setLastSentPhone] = useState<string>('');
   const [wrongOtpAttempts, setWrongOtpAttempts] = useState<number>(0);
   const [otpAttemptCount, setOtpAttemptCount] = useState<number>(0);
   const [cooldownEndTime, setCooldownEndTime] = useState<number>(0);
@@ -102,11 +103,16 @@ export function LoginScreen() {
         setHasSeenOnboarding(Boolean(data?.seen));
       }
     });
-    getSecureItem<{ attemptCount?: number; cooldownEndTime?: number }>(
-      OTP_BACKOFF_STORAGE_KEY
-    ).then((data) => {
+    getSecureItem<{
+      attemptCount?: number;
+      cooldownEndTime?: number;
+      lastSentPhone?: string;
+      wrongOtpAttempts?: number;
+    }>(OTP_BACKOFF_STORAGE_KEY).then((data) => {
       if (!active || !data) return;
       setOtpAttemptCount(data.attemptCount || 0);
+      setLastSentPhone(data.lastSentPhone || '');
+      setWrongOtpAttempts(data.wrongOtpAttempts || 0);
       if (data.cooldownEndTime && data.cooldownEndTime > Date.now()) {
         setCooldownEndTime(data.cooldownEndTime);
         setResendTimer(Math.ceil((data.cooldownEndTime - Date.now()) / 1000));
@@ -218,6 +224,11 @@ export function LoginScreen() {
 
   const requiredPhoneLength = phone.startsWith('0') ? 11 : 10;
   const isPhoneComplete = phone.length === requiredPhoneLength;
+  const currentFullPhone = isPhoneComplete ? getFullInternationalPhone() : '';
+  const isSamePhoneInCooldown =
+    Boolean(lastSentPhone) &&
+    currentFullPhone === lastSentPhone &&
+    resendTimer > 0;
 
   const handlePhoneChange = (text: string) => {
     let clean = text.replace(/[^0-9]/g, '');
@@ -233,10 +244,6 @@ export function LoginScreen() {
   };
 
   const handleSendWhatsAppOtp = async () => {
-    if (resendTimer > 0 && step === 'otp') {
-      return;
-    }
-
     Keyboard.dismiss();
     setErrorText(null);
 
@@ -256,6 +263,13 @@ export function LoginScreen() {
     }
 
     const fullPhone = getFullInternationalPhone();
+    if (resendTimer > 0 && (step === 'otp' || fullPhone === lastSentPhone)) {
+      setErrorText(
+        `يرجى الانتظار ${formatResendWait(resendTimer)} قبل طلب رمز جديد لهذا الرقم.`
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
       const fp = await getCompositeDeviceFingerprint();
@@ -273,6 +287,7 @@ export function LoginScreen() {
       const nextEndTime = Date.now() + cooldownSeconds * 1000;
 
       setOtpCode('');
+      setLastSentPhone(fullPhone);
       setWrongOtpAttempts(0);
       setOtpAttemptCount(nextAttemptCount);
       setCooldownEndTime(nextEndTime);
@@ -280,6 +295,8 @@ export function LoginScreen() {
       await setSecureItem(OTP_BACKOFF_STORAGE_KEY, {
         attemptCount: nextAttemptCount,
         cooldownEndTime: nextEndTime,
+        lastSentPhone: fullPhone,
+        wrongOtpAttempts: 0,
       });
 
       setStep('otp');
@@ -314,6 +331,12 @@ export function LoginScreen() {
       if (!res.ok) {
         const nextWrong = wrongOtpAttempts + 1;
         setWrongOtpAttempts(nextWrong);
+        await setSecureItem(OTP_BACKOFF_STORAGE_KEY, {
+          attemptCount: otpAttemptCount,
+          cooldownEndTime,
+          lastSentPhone,
+          wrongOtpAttempts: nextWrong,
+        });
         if (nextWrong >= 3) {
           setErrorText('تم إدخال رمز خاطئ 3 مرات. تم إيقاف التأكيد حتى تطلب رمزاً جديداً.');
         } else {
@@ -324,6 +347,7 @@ export function LoginScreen() {
       }
 
       // تصفير عداد المضاعفة ومحاولات الخطأ بمجرد نجاح التحقق
+      setLastSentPhone('');
       setWrongOtpAttempts(0);
       setOtpAttemptCount(0);
       setCooldownEndTime(0);
@@ -496,7 +520,7 @@ export function LoginScreen() {
                       selectionColor={APP_THEME.primary}
                       returnKeyType="done"
                       onSubmitEditing={() => {
-                        if (isPhoneComplete) {
+                        if (isPhoneComplete && !isSamePhoneInCooldown) {
                           handleSendWhatsAppOtp();
                         }
                       }}
@@ -507,11 +531,12 @@ export function LoginScreen() {
                 <Pressable
                   style={({ pressed }) => [
                     styles.primaryBtn,
-                    (!isPhoneComplete || submitting) && styles.primaryBtnDisabled,
-                    pressed && styles.primaryBtnPressed,
+                    (!isPhoneComplete || submitting || isSamePhoneInCooldown) &&
+                      styles.primaryBtnDisabled,
+                    pressed && !isSamePhoneInCooldown && styles.primaryBtnPressed,
                   ]}
                   onPress={handleSendWhatsAppOtp}
-                  disabled={!isPhoneComplete || submitting}>
+                  disabled={!isPhoneComplete || submitting || isSamePhoneInCooldown}>
                   {submitting ? (
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
@@ -521,6 +546,27 @@ export function LoginScreen() {
                     </>
                   )}
                 </Pressable>
+
+                {isSamePhoneInCooldown ? (
+                  <View style={styles.resendWrap}>
+                    <Text style={styles.resendTimerText}>
+                      يمكنك إرسال رمز جديد لهذا الرقم خلال {formatResendWait(resendTimer)}
+                    </Text>
+                    {!isOtpLocked ? (
+                      <Pressable
+                        onPress={() => {
+                          setErrorText(null);
+                          setStep('otp');
+                        }}
+                        hitSlop={8}
+                        style={{ marginTop: 6 }}>
+                        <Text style={styles.resendActionText}>
+                          العودة لإدخال الرمز الحالي
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
 
                 <View style={styles.securityNote}>
                   <Ionicons name="shield-checkmark-outline" size={15} color="#64748B" />
