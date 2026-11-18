@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useRouter } from 'expo-router';
 import { useSafeBottomTabPadding, useSafeTopInset } from '@/core/theme/useSafeTopInset';
 import { rtlFlexDirection } from '@/core/theme/rtl';
@@ -101,15 +102,16 @@ export function NewsManagementScreen() {
 
     try {
       const filename = originalFilename || (mediaType === 'image' ? 'photo.jpg' : 'video.mp4');
-      let uploadRes: Response;
+      let json: any = null;
+      let isSuccess = false;
 
-      // ١. إذا كانت الصورة متوفرة كـ Base64، نرفعها كـ JSON مباشرة (أضمن وأسرع طريقة في React Native لجميع هواتف أندرويد وآيفون)
+      // ١. إذا كانت الصورة متوفرة كـ Base64، نرفعها كـ JSON مباشرة (أضمن وأسرع طريقة في React Native)
       if (base64Data) {
-        uploadRes = await fetch(`${API_BASE_URL}/storage/upload`, {
+        const uploadRes = await fetch(`${API_BASE_URL}/storage/upload`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
             base64: base64Data,
@@ -118,40 +120,55 @@ export function NewsManagementScreen() {
             media_type: mediaType,
           }),
         });
-      } else {
-        // ٢. إذا كان ملف فيديو، نرفعه عبر FormData
-        const formData = new FormData();
-        const mimeType = mediaType === 'image' ? 'image/jpeg' : 'video/mp4';
-
-        if (Platform.OS === 'web') {
-          const resp = await fetch(fileUri);
-          const blob = await resp.blob();
-          formData.append('file', blob, filename);
-        } else {
-          formData.append('file', {
-            uri: fileUri,
-            name: filename,
-            type: mimeType,
-          } as any);
+        json = await uploadRes.json();
+        isSuccess = uploadRes.ok && Boolean(json?.success);
+      } else if (Platform.OS !== 'web') {
+        // ٢. إذا كان ملف فيديو على هاتف محمول (أندرويد أو آيفون):
+        // نستخدم FileSystem.uploadAsync الأصيل من Expo لمنع خطأ Unsupported FormDataPart implementation
+        const mimeType = mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
+        const uploadResult = await FileSystem.uploadAsync(
+          `${API_BASE_URL}/storage/upload?section=news&media_type=${mediaType}`,
+          fileUri,
+          {
+            httpMethod: 'POST',
+            uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+            fieldName: 'file',
+            mimeType,
+            parameters: {
+              section: 'news',
+              media_type: mediaType,
+            },
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          }
+        );
+        try {
+          json = JSON.parse(uploadResult.body);
+        } catch {
+          json = null;
         }
-
+        isSuccess = uploadResult.status >= 200 && uploadResult.status < 300 && Boolean(json?.success);
+      } else {
+        // ٣. على بيئة المتصفح (Web Browser)
+        const resp = await fetch(fileUri);
+        const blob = await resp.blob();
+        const formData = new FormData();
+        formData.append('file', blob, filename);
         formData.append('section', 'news');
         formData.append('media_type', mediaType);
 
-        uploadRes = await fetch(
+        const uploadRes = await fetch(
           `${API_BASE_URL}/storage/upload?section=news&media_type=${mediaType}`,
           {
             method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
             body: formData,
           }
         );
+        json = await uploadRes.json();
+        isSuccess = uploadRes.ok && Boolean(json?.success);
       }
 
-      const json = await uploadRes.json();
-      if (uploadRes.ok && json.success && json.data?.url) {
+      if (isSuccess && json?.data?.url) {
         if (mediaType === 'image') {
           setDriveImageUrl(json.data.url);
         } else {
@@ -167,11 +184,11 @@ export function NewsManagementScreen() {
         } else {
           Alert.alert(
             '⚠️ تم الحفظ مؤقتاً على السيرفر',
-            `تم حفظ الملف مؤقتاً في مسار المنظومة:\n${json.data.folder_path}\n\nتنبيه: حساب Google Drive (5 تيرا) غير مربوط بعد. تم وضع الرابط المحلي مؤقتاً. لرفع الصور مباشرة على حسابك الـ 5 تيرا، يرجى تفعيل مفتاح الربط السحابي.`
+            `تم حفظ الملف مؤقتاً في مسار المنظومة:\n${json.data.folder_path}`
           );
         }
       } else {
-        Alert.alert('فشل الرفع', json?.error?.message || 'تعذر رفع الملف.');
+        Alert.alert('فشل الرفع', json?.error?.message || json?.error || 'تعذر رفع الملف.');
       }
     } catch (err: any) {
       console.warn('[uploadLocalFile] Error:', err);

@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -125,9 +127,11 @@ export function ReportsScreen() {
       const asset = !res.canceled ? res.assets[0] : null;
       if (!asset?.uri) return;
 
-      let uploadRes: Response;
+      let uploadJson: any = null;
+      let uploadOk = false;
+
       if (asset.base64) {
-        uploadRes = await fetch(`${API_BASE_URL}/storage/upload`, {
+        const uploadRes = await fetch(`${API_BASE_URL}/storage/upload`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -137,23 +141,49 @@ export function ReportsScreen() {
             media_type: 'image',
           }),
         });
+        uploadJson = await uploadRes.json().catch(() => null);
+        uploadOk = uploadRes.ok && Boolean(uploadJson?.success);
+      } else if (Platform.OS !== 'web') {
+        const uploadResult = await FileSystem.uploadAsync(
+          `${API_BASE_URL}/storage/upload?section=reports&media_type=image`,
+          asset.uri,
+          {
+            httpMethod: 'POST',
+            uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+            fieldName: 'file',
+            mimeType: 'image/jpeg',
+            parameters: {
+              section: 'reports',
+              media_type: 'image',
+            },
+          }
+        );
+        try {
+          uploadJson = JSON.parse(uploadResult.body);
+        } catch {
+          uploadJson = null;
+        }
+        uploadOk = uploadResult.status >= 200 && uploadResult.status < 300 && Boolean(uploadJson?.success);
       } else {
+        const resp = await fetch(asset.uri);
+        const blob = await resp.blob();
         const formData = new FormData();
-        formData.append('file', {
-          uri: asset.uri,
-          name: asset.fileName || `report_${Date.now()}.jpg`,
-          type: 'image/jpeg',
-        } as any);
-        uploadRes = await fetch(
+        formData.append('file', blob, asset.fileName || `report_${Date.now()}.jpg`);
+        formData.append('section', 'reports');
+        formData.append('media_type', 'image');
+
+        const uploadRes = await fetch(
           `${API_BASE_URL}/storage/upload?section=reports&media_type=image`,
           { method: 'POST', body: formData }
         );
+        uploadJson = await uploadRes.json().catch(() => null);
+        uploadOk = uploadRes.ok && Boolean(uploadJson?.success);
       }
-      const uploadJson = await uploadRes.json().catch(() => null);
-      if (uploadRes.ok && uploadJson?.success && uploadJson?.data?.url) {
+
+      if (uploadOk && uploadJson?.data?.url) {
         setReportImage(uploadJson.data.url);
       } else {
-        Alert.alert('تعذر رفع الصورة', uploadJson?.error?.message || 'يرجى المحاولة مرة أخرى');
+        Alert.alert('تعذر رفع الصورة', uploadJson?.error?.message || uploadJson?.error || 'يرجى المحاولة مرة أخرى');
       }
     } catch {
       Alert.alert('خطأ', 'تعذر رفع الصورة إلى Google Drive');
