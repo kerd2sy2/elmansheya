@@ -1,5 +1,5 @@
-import Constants, { ExecutionEnvironment } from 'expo-constants';
-import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 import { Platform } from 'react-native';
 import { getCompositeDeviceFingerprint } from '@/core/security/deviceFingerprint';
 import { registerPushTokenWithBackend } from '../api/notifications.api';
@@ -7,42 +7,116 @@ import { VillageNotificationItem } from '../types/notifications.types';
 
 export const ANDROID_CHANNEL_ID = 'elmansheya_high_alerts_v1';
 
-let isHandlerInitialized = false;
+interface NotificationHandlerNativeModule {
+  addListener?: (
+    eventName: string,
+    listener: (event: { id?: string }) => void
+  ) => { remove: () => void };
+  handleNotificationAsync?: (
+    notificationId: string,
+    behavior: {
+      shouldShowAlert: boolean;
+      shouldShowBanner: boolean;
+      shouldShowList: boolean;
+      shouldPlaySound: boolean;
+      shouldSetBadge: boolean;
+    }
+  ) => Promise<void>;
+}
+
+interface NotificationChannelNativeModule {
+  setNotificationChannelAsync?: (
+    channelId: string,
+    channel: Record<string, unknown>
+  ) => Promise<unknown>;
+}
+
+interface NotificationPermissionsNativeModule {
+  getPermissionsAsync?: () => Promise<{ status?: string; granted?: boolean }>;
+  requestPermissionsAsync?: (
+    permissions?: Record<string, unknown>
+  ) => Promise<{ status?: string; granted?: boolean }>;
+}
+
+interface NotificationSchedulerNativeModule {
+  scheduleNotificationAsync?: (
+    identifier: string,
+    content: Record<string, unknown>,
+    trigger: Record<string, unknown> | null
+  ) => Promise<string>;
+}
+
+interface NotificationsEmitterNativeModule {
+  addListener?: (
+    eventName: string,
+    listener: (response: Record<string, any>) => void
+  ) => { remove: () => void };
+}
+
+interface PushTokenManagerNativeModule {
+  getDevicePushTokenAsync?: () => Promise<string | { data?: string }>;
+}
+
+let handlerSub: { remove: () => void } | null = null;
 let isChannelInitialized = false;
 
-function ensureNotificationHandler(): void {
-  if (Platform.OS === 'web' || isHandlerInitialized) return;
-  isHandlerInitialized = true;
+function getOptional<T>(name: string): T | null {
+  if (Platform.OS === 'web') return null;
   try {
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-      }),
+    return requireOptionalNativeModule<T>(name);
+  } catch {
+    return null;
+  }
+}
+
+function ensureNotificationHandler(): void {
+  if (Platform.OS === 'web' || handlerSub) return;
+  const handlerMod = getOptional<NotificationHandlerNativeModule>(
+    'ExpoNotificationsHandlerModule'
+  );
+  if (!handlerMod?.addListener) return;
+
+  try {
+    handlerSub = handlerMod.addListener('onHandleNotification', async (ev) => {
+      try {
+        if (ev?.id && handlerMod.handleNotificationAsync) {
+          await handlerMod.handleNotificationAsync(ev.id, {
+            shouldShowAlert: true,
+            shouldShowBanner: true,
+            shouldShowList: true,
+            shouldPlaySound: true,
+            shouldSetBadge: true,
+          });
+        }
+      } catch {
+        // ignore foreground notification response failure
+      }
     });
   } catch {
-    // ignore on unsupported environments
+    // ignore listener errors
   }
 }
 
 export async function ensureAndroidHighChannel(): Promise<void> {
   if (Platform.OS !== 'android' || isChannelInitialized) return;
+  const channelMod = getOptional<NotificationChannelNativeModule>(
+    'ExpoNotificationChannelManager'
+  );
+  if (!channelMod?.setNotificationChannelAsync) return;
+
   try {
-    await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
+    await channelMod.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
       name: 'إشعارات قرية المنشية',
-      importance: Notifications.AndroidImportance.MAX,
+      importance: 5, // AndroidImportance.MAX
       sound: 'default',
       enableVibrate: true,
       vibrationPattern: [0, 250, 250, 250],
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      lockscreenVisibility: 1, // AndroidNotificationVisibility.PUBLIC
       showBadge: true,
     });
     isChannelInitialized = true;
   } catch {
-    // ignore channel setup failure
+    // ignore channel creation failure
   }
 }
 
@@ -52,49 +126,39 @@ export async function initOsNotifications(userPhone?: string): Promise<void> {
   await ensureAndroidHighChannel();
 
   try {
-    const existing = await Notifications.getPermissionsAsync();
-    let finalStatus = existing.status;
-    if (finalStatus !== 'granted') {
-      const requested = await Notifications.requestPermissionsAsync();
-      finalStatus = requested.status;
-    }
-    if (finalStatus !== 'granted') return;
-
-    const isExpoGo =
-      Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
-    if (isExpoGo) return;
-
-    const fp = await getCompositeDeviceFingerprint().catch(() => '');
-
-    if (Platform.OS === 'android') {
-      Notifications.subscribeToTopicAsync('elmansheya_all').catch(() => {});
-    }
-
-    const projectId =
-      Constants.expoConfig?.extra?.eas?.projectId ??
-      Constants.easConfig?.projectId;
-
-    if (projectId) {
-      try {
-        const expoTok = await Notifications.getExpoPushTokenAsync({ projectId });
-        if (expoTok?.data) {
-          await registerPushTokenWithBackend(expoTok.data, userPhone, fp);
-        }
-      } catch {
-        // ignore if Expo push token unavailable
+    const permsMod = getOptional<NotificationPermissionsNativeModule>(
+      'ExpoNotificationPermissionsModule'
+    );
+    if (permsMod?.getPermissionsAsync) {
+      const existing = await permsMod.getPermissionsAsync();
+      let granted = Boolean(existing?.granted || existing?.status === 'granted');
+      if (!granted && permsMod.requestPermissionsAsync) {
+        const reqCfg =
+          Platform.OS === 'ios'
+            ? { allowAlert: true, allowBadge: true, allowSound: true }
+            : undefined;
+        const requested = await permsMod.requestPermissionsAsync(reqCfg);
+        granted = Boolean(requested?.granted || requested?.status === 'granted');
       }
+      if (!granted) return;
     }
 
-    try {
-      const deviceTok = await Notifications.getDevicePushTokenAsync();
-      if (typeof deviceTok?.data === 'string' && deviceTok.data) {
-        await registerPushTokenWithBackend(deviceTok.data, userPhone, fp);
+    const pushMgr = getOptional<PushTokenManagerNativeModule>('ExpoPushTokenManager');
+    if (pushMgr?.getDevicePushTokenAsync && (Constants.executionEnvironment as string) !== 'storeClient') {
+      const fp = await getCompositeDeviceFingerprint().catch(() => '');
+      const deviceTok = await pushMgr.getDevicePushTokenAsync();
+      const token =
+        typeof deviceTok === 'string'
+          ? deviceTok
+          : typeof deviceTok === 'object' && deviceTok !== null
+          ? String((deviceTok as { data?: string }).data || '')
+          : '';
+      if (token) {
+        await registerPushTokenWithBackend(token, userPhone, fp);
       }
-    } catch {
-      // ignore if native device token unavailable
     }
   } catch {
-    // ignore initialization error in restricted clients
+    // ignore restricted native permissions/tokens errors
   }
 }
 
@@ -105,41 +169,69 @@ export async function presentOsStatusBarNotification(
   ensureNotificationHandler();
   await ensureAndroidHighChannel();
 
+  const scheduler = getOptional<NotificationSchedulerNativeModule>(
+    'ExpoNotificationScheduler'
+  );
+  if (!scheduler?.scheduleNotificationAsync) return;
+
   try {
-    await Notifications.scheduleNotificationAsync({
-      identifier: item.id,
-      content: {
+    await scheduler.scheduleNotificationAsync(
+      item.id,
+      {
         title: `${item.section_ar}: ${item.title}`,
         body: item.body,
         sound: 'default',
-        priority: Notifications.AndroidNotificationPriority.MAX,
+        priority: 'max',
         data: {
           id: item.id,
           section: item.section,
           target_id: item.target_id || '',
         },
       },
-      trigger:
-        Platform.OS === 'android'
-          ? { channelId: ANDROID_CHANNEL_ID }
-          : null,
-    });
+      Platform.OS === 'android'
+        ? { type: 'channel', channelId: ANDROID_CHANNEL_ID }
+        : null
+    );
   } catch {
-    // ignore if notification scheduling is blocked
+    // ignore scheduling errors
   }
+}
+
+function extractNotificationData(
+  response: Record<string, any>
+): Record<string, unknown> {
+  const content = response?.notification?.request?.content;
+  if (!content) return {};
+  if (content.data && typeof content.data === 'object') {
+    return content.data as Record<string, unknown>;
+  }
+  if (typeof content.dataString === 'string') {
+    try {
+      const parsed = JSON.parse(content.dataString);
+      if (parsed && typeof parsed === 'object') {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // ignore invalid JSON dataString
+    }
+  }
+  return {};
 }
 
 export function subscribeToOsNotificationTap(
   onTap: (data: { id?: string; section?: string; target_id?: string }) => void
 ): () => void {
-  if (Platform.OS === 'web') {
-    return () => {};
-  }
+  if (Platform.OS === 'web') return () => {};
+  const emitter = getOptional<NotificationsEmitterNativeModule>(
+    'ExpoNotificationsEmitter'
+  );
+  if (!emitter?.addListener) return () => {};
+
   try {
-    const sub = Notifications.addNotificationResponseReceivedListener(
+    const sub = emitter.addListener(
+      'onDidReceiveNotificationResponse',
       (response) => {
-        const rawData = (response?.notification?.request?.content?.data ||
-          {}) as Record<string, unknown>;
+        const rawData = extractNotificationData(response);
         onTap({
           id: typeof rawData.id === 'string' ? rawData.id : undefined,
           section:

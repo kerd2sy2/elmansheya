@@ -73,7 +73,7 @@ export function useNotificationsFeed(
       presentOsStatusBarNotification(item);
       try {
         if (Platform.OS !== 'web') {
-          Vibration.vibrate(250);
+          Vibration.vibrate([0, 220, 120, 280]);
         }
       } catch {
         // ignore vibration failure
