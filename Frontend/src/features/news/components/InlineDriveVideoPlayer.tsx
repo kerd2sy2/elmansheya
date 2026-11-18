@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   I18nManager,
@@ -17,6 +17,7 @@ import {
   extractGoogleDriveFileId,
   getDirectVideoUrl,
   getGoogleDrivePreviewUrl,
+  getGoogleDriveThumbnailUrl,
 } from '@/core/utils/googleDrive';
 import {
   shouldAutoPlayVideoNow,
@@ -62,11 +63,13 @@ interface InlineDriveVideoPlayerProps {
  */
 function NativeExoPlayerView({
   streamUrl,
+  effectiveCoverUrl,
   height,
   isActive,
   autoPlayAllowed,
 }: {
   streamUrl: string;
+  effectiveCoverUrl?: string | null;
   height?: number;
   isActive: boolean;
   autoPlayAllowed: boolean;
@@ -81,7 +84,16 @@ function NativeExoPlayerView({
   // تحديد نسبة العرض إلى الارتفاع الطبيعية للفيديو تلقائياً لعرضه كاملاً دون أي اقتصاص
   const [videoAspectRatio, setVideoAspectRatio] = useState<number>(16 / 9);
 
-  const player = useVideoPlayer(streamUrl, (p: any) => {
+  // حماية صارمة لذاكرة أندرويد: حصر كاش الفيديو بـ 4MB كحد أقصى لمنع الـ OOM
+  const videoSource = useMemo(() => ({
+    uri: streamUrl,
+    bufferOptions: {
+      maxBufferBytes: 4 * 1024 * 1024,
+      minBufferForPlayback: 1,
+    },
+  }), [streamUrl]);
+
+  const player = useVideoPlayer(videoSource, (p: any) => {
     p.loop = true;
     p.muted = true;
   });
@@ -89,10 +101,10 @@ function NativeExoPlayerView({
   useEffect(() => {
     if (!player) return;
     const subPlaying = player.addListener?.('playingChange', (ev: any) => {
-      setIsPlaying(ev.isPlaying);
+      setIsPlaying(Boolean(ev.isPlaying));
     });
     const subMuted = player.addListener?.('mutedChange', (ev: any) => {
-      setIsMuted(ev.isMuted);
+      setIsMuted(Boolean(ev.isMuted));
     });
     const subTrack = player.addListener?.('videoTrackChange', (ev: any) => {
       const size = ev.videoTrack?.size;
@@ -157,17 +169,17 @@ function NativeExoPlayerView({
     }
   };
 
-  // تبديل الصوت بشكل موثوق وسلس
+  // تبديل الصوت بشكل موثوق وسلس بالاعتماد المباشر على حالة المشغل
   const handleToggleMute = (e?: any) => {
     e?.stopPropagation?.();
     if (!player) return;
-    const nextMuted = !isMuted;
-    setIsMuted(nextMuted);
     try {
+      const nextMuted = !player.muted;
       player.muted = nextMuted;
       if (!nextMuted) {
         player.volume = 1.0;
       }
+      setIsMuted(nextMuted);
     } catch {}
   };
 
@@ -177,6 +189,15 @@ function NativeExoPlayerView({
         styles.container,
         height ? { height } : { width: '100%', aspectRatio: videoAspectRatio },
       ]}>
+      {/* خلفية صورة المعاينة الفورية: تمنع أي شاشة سوداء أثناء تحميل الفيديو عبر الإنترنت */}
+      {effectiveCoverUrl ? (
+        <Image
+          source={{ uri: effectiveCoverUrl }}
+          style={[StyleSheet.absoluteFill, styles.coverImage]}
+          contentFit="contain"
+        />
+      ) : null}
+
       {/* منطقة الفيديو القابلة للضغط للتشغيل والإيقاف المؤقت فقط */}
       <Pressable
         style={StyleSheet.absoluteFill}
@@ -293,6 +314,8 @@ export function InlineDriveVideoPlayer({
   const fileId = extractGoogleDriveFileId(videoUrl);
   const directStreamUrl = getDirectVideoUrl(videoUrl);
   const previewUrl = getGoogleDrivePreviewUrl(videoUrl);
+  const effectiveCoverUrl =
+    coverImageUrl || getGoogleDriveThumbnailUrl(videoUrl);
 
   const containerDimension = height ? { height } : { width: '100%' as const, aspectRatio: 16 / 9 };
 
@@ -341,11 +364,11 @@ export function InlineDriveVideoPlayer({
         style={[styles.container, containerDimension]}
         onPress={() => setUserExplicitPlay(true)}
         accessibilityLabel="تشغيل الفيديو المدمج">
-        {coverImageUrl ? (
+        {effectiveCoverUrl ? (
           <Image
-            source={{ uri: coverImageUrl }}
+            source={{ uri: effectiveCoverUrl }}
             style={styles.coverImage}
-            contentFit="cover"
+            contentFit="contain"
             transition={200}
           />
         ) : (
@@ -372,6 +395,7 @@ export function InlineDriveVideoPlayer({
     return (
       <NativeExoPlayerView
         streamUrl={directStreamUrl}
+        effectiveCoverUrl={effectiveCoverUrl}
         height={height}
         isActive={isActive}
         autoPlayAllowed={autoPlayAllowed}
@@ -394,11 +418,11 @@ export function InlineDriveVideoPlayer({
     <Pressable
       style={[styles.container, styles.fallbackContainer, containerDimension]}
       onPress={handleFallbackPlay}>
-      {coverImageUrl ? (
+      {effectiveCoverUrl ? (
         <Image
-          source={{ uri: coverImageUrl }}
+          source={{ uri: effectiveCoverUrl }}
           style={[StyleSheet.absoluteFill, { opacity: 0.35 }]}
-          contentFit="cover"
+          contentFit="contain"
         />
       ) : null}
       <View style={styles.playCircle}>

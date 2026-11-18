@@ -75,3 +75,16 @@ export function getGoogleDrivePreviewUrl(rawUrl: string | null | undefined): str
   }
   return rawUrl;
 }
+
+/**
+ * استخراج صورة المعاينة (Thumbnail) لفيديوهات وصور جوجل درايف تلقائياً بدقة عالية
+ * تخدمها شبكة Google Edge CDN العالمية بسرعة فائقة وبدون أي استهلاك لموارد السيرفر
+ */
+export function getGoogleDriveThumbnailUrl(rawUrl: string | null | undefined): string {
+  if (!rawUrl) return '';
+  const fileId = extractGoogleDriveFileId(rawUrl);
+  if (fileId) {
+    return `https://lh3.googleusercontent.com/d/${fileId}=w1000`;
+  }
+  return '';
+}

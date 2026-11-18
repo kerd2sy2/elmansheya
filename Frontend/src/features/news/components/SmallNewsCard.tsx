@@ -14,7 +14,11 @@ import {
   View,
 } from 'react-native';
 import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
-import { getDirectImageUrl, getDirectVideoUrl } from '@/core/utils/googleDrive';
+import {
+  getDirectImageUrl,
+  getDirectVideoUrl,
+  getGoogleDriveThumbnailUrl,
+} from '@/core/utils/googleDrive';
 import { InlineDriveVideoPlayer } from './InlineDriveVideoPlayer';
 import { NewsCardItem } from '../types/news.types';
 
@@ -153,7 +157,9 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
   const { time, date } = formatPublishTimeAndDate(item.published_at);
-  const directCoverUrl = getDirectImageUrl(item.cover_image_url);
+  const directCoverUrl =
+    getDirectImageUrl(item.cover_image_url) ||
+    getGoogleDriveThumbnailUrl(item.video_stream_url);
   const directAvatarUrl = getDirectImageUrl(item.author_avatar_url);
   const directVideoUrl = getDirectVideoUrl(item.video_stream_url);
   const hasImage = Boolean(directCoverUrl);
