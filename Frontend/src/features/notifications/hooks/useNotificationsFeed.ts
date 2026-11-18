@@ -1,14 +1,16 @@
 import * as Haptics from 'expo-haptics';
-import { requireOptionalNativeModule } from 'expo-modules-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Vibration } from 'react-native';
 import { getSecureItem, setSecureItem } from '@/core/auth-storage/sessionStorage';
-import { getCompositeDeviceFingerprint } from '@/core/security/deviceFingerprint';
 import {
   fetchNotificationsFeed,
-  registerPushTokenWithBackend,
   subscribeNotificationsRefresh,
 } from '../api/notifications.api';
+import {
+  initOsNotifications,
+  presentOsStatusBarNotification,
+  subscribeToOsNotificationTap,
+} from '../services/osNotifications';
 import { VillageNotificationItem } from '../types/notifications.types';
 
 const NOTIF_STATE_STORAGE_KEY = 'elmansheya_notif_state_v2';
@@ -27,7 +29,14 @@ const DEFAULT_STORED_STATE: StoredNotifState = {
   dismissedIds: [],
 };
 
-export function useNotificationsFeed(userPhone?: string) {
+export function useNotificationsFeed(
+  userPhone?: string,
+  onOsTapNavigate?: (data: {
+    id?: string;
+    section?: string;
+    target_id?: string;
+  }) => void
+) {
   const [allNotifications, setAllNotifications] = useState<VillageNotificationItem[]>([]);
   const [notifState, setNotifState] = useState<StoredNotifState>(DEFAULT_STORED_STATE);
   const [stateLoaded, setStateLoaded] = useState<boolean>(false);
@@ -40,6 +49,8 @@ export function useNotificationsFeed(userPhone?: string) {
   const stateRef = useRef<StoredNotifState>(DEFAULT_STORED_STATE);
   const allNotifsRef = useRef<VillageNotificationItem[]>([]);
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onOsTapRef = useRef(onOsTapNavigate);
+  onOsTapRef.current = onOsTapNavigate;
 
   const persistNotifState = useCallback(async (nextState: StoredNotifState) => {
     stateRef.current = nextState;
@@ -59,6 +70,7 @@ export function useNotificationsFeed(userPhone?: string) {
     (item: VillageNotificationItem) => {
       dismissBanner();
       setLatestBannerNotification(item);
+      presentOsStatusBarNotification(item);
       try {
         if (Platform.OS !== 'web') {
           Vibration.vibrate(250);
@@ -144,83 +156,6 @@ export function useNotificationsFeed(userPhone?: string) {
     }
   }, [persistNotifState, triggerBanner]);
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const saved = await getSecureItem<Partial<StoredNotifState>>(NOTIF_STATE_STORAGE_KEY);
-      if (!active) return;
-      if (saved && typeof saved === 'object') {
-        const cleanSaved: StoredNotifState = {
-          lastClearedTimestamp: Number(saved.lastClearedTimestamp || 0),
-          lastBannerTimestamp: Number(saved.lastBannerTimestamp || 0),
-          dismissedIds: Array.isArray(saved.dismissedIds)
-            ? saved.dismissedIds.slice(-30)
-            : [],
-        };
-        stateRef.current = cleanSaved;
-        setNotifState(cleanSaved);
-      }
-      setStateLoaded(true);
-      await refresh();
-    })();
-
-    const unsubscribe = subscribeNotificationsRefresh(() => {
-      refresh();
-    });
-    const timer = setInterval(() => {
-      refresh();
-    }, POLL_INTERVAL_MS);
-
-    return () => {
-      active = false;
-      unsubscribe();
-      clearInterval(timer);
-      if (bannerTimerRef.current) {
-        clearTimeout(bannerTimerRef.current);
-      }
-    };
-  }, [refresh]);
-
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    let active = true;
-    (async () => {
-      try {
-        const pushMgr = requireOptionalNativeModule<{
-          getDevicePushTokenAsync?: () => Promise<{ data?: string } | string>;
-        }>('ExpoPushTokenManager');
-        if (!pushMgr?.getDevicePushTokenAsync) return;
-
-        const tokenRes = await pushMgr.getDevicePushTokenAsync();
-        const token =
-          typeof tokenRes === 'string'
-            ? tokenRes
-            : typeof tokenRes?.data === 'string'
-            ? tokenRes.data
-            : '';
-        if (!active || !token) return;
-        const fp = await getCompositeDeviceFingerprint().catch(() => '');
-        await registerPushTokenWithBackend(token, userPhone, fp);
-      } catch {
-        // تجاهل في Expo Go
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [userPhone]);
-
-  const notifications = useMemo(() => {
-    if (!stateLoaded) return [];
-    const { lastClearedTimestamp, dismissedIds } = notifState;
-    const dismissedSet = new Set(dismissedIds);
-    return allNotifications.filter(
-      (item) =>
-        Number(item.timestamp || 0) > lastClearedTimestamp &&
-        !dismissedSet.has(item.id)
-    );
-  }, [allNotifications, notifState, stateLoaded]);
-
   const dismissNotification = useCallback(
     async (id: string) => {
       const current = stateRef.current;
@@ -241,6 +176,66 @@ export function useNotificationsFeed(userPhone?: string) {
     [persistNotifState]
   );
 
+  useEffect(() => {
+    let active = true;
+    initOsNotifications(userPhone);
+
+    (async () => {
+      const saved = await getSecureItem<Partial<StoredNotifState>>(
+        NOTIF_STATE_STORAGE_KEY
+      );
+      if (!active) return;
+      if (saved && typeof saved === 'object') {
+        const cleanSaved: StoredNotifState = {
+          lastClearedTimestamp: Number(saved.lastClearedTimestamp || 0),
+          lastBannerTimestamp: Number(saved.lastBannerTimestamp || 0),
+          dismissedIds: Array.isArray(saved.dismissedIds)
+            ? saved.dismissedIds.slice(-30)
+            : [],
+        };
+        stateRef.current = cleanSaved;
+        setNotifState(cleanSaved);
+      }
+      setStateLoaded(true);
+      await refresh();
+    })();
+
+    const unsubscribeRefresh = subscribeNotificationsRefresh(() => {
+      refresh();
+    });
+    const unsubscribeOsTap = subscribeToOsNotificationTap((data) => {
+      if (data.id) {
+        dismissNotification(data.id);
+      }
+      dismissBanner();
+      onOsTapRef.current?.(data);
+    });
+    const timer = setInterval(() => {
+      refresh();
+    }, POLL_INTERVAL_MS);
+
+    return () => {
+      active = false;
+      unsubscribeRefresh();
+      unsubscribeOsTap();
+      clearInterval(timer);
+      if (bannerTimerRef.current) {
+        clearTimeout(bannerTimerRef.current);
+      }
+    };
+  }, [dismissBanner, dismissNotification, refresh, userPhone]);
+
+  const notifications = useMemo(() => {
+    if (!stateLoaded) return [];
+    const { lastClearedTimestamp, dismissedIds } = notifState;
+    const dismissedSet = new Set(dismissedIds);
+    return allNotifications.filter(
+      (item) =>
+        Number(item.timestamp || 0) > lastClearedTimestamp &&
+        !dismissedSet.has(item.id)
+    );
+  }, [allNotifications, notifState, stateLoaded]);
+
   const clearAllNotifications = useCallback(async () => {
     const current = stateRef.current;
     const maxItemTs = allNotifsRef.current.reduce(
@@ -254,7 +249,10 @@ export function useNotificationsFeed(userPhone?: string) {
     );
     await persistNotifState({
       lastClearedTimestamp: nextClearedTs,
-      lastBannerTimestamp: Math.max(current.lastBannerTimestamp || 0, nextClearedTs),
+      lastBannerTimestamp: Math.max(
+        current.lastBannerTimestamp || 0,
+        nextClearedTs
+      ),
       dismissedIds: [],
     });
   }, [persistNotifState]);

@@ -50,6 +50,29 @@ export function NewsHomeScreen() {
   const { user } = useAuth();
   const { feed, loading, refreshing, servedFromCache, isOffline, refresh } =
     useNewsFeed();
+  const [selectedNews, setSelectedNews] = useState<NewsCardItem | null>(null);
+  const [showSearch, setShowSearch] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [showNotificationsModal, setShowNotificationsModal] =
+    useState<boolean>(false);
+
+  const navigateByNotificationTarget = (section?: string, targetId?: string) => {
+    setShowNotificationsModal(false);
+    if (section === 'reports') {
+      router.push('/reports');
+    } else if (section === 'craftsmen') {
+      router.push('/craftsmen');
+    } else if (section === 'services') {
+      router.push('/services');
+    } else if (section === 'news' && targetId && feed) {
+      const allNews = [...(feed.pinned_featured || []), ...(feed.small_news || [])];
+      const target = allNews.find((n) => n.id === targetId);
+      if (target) {
+        setSelectedNews(target);
+      }
+    }
+  };
+
   const {
     notifications,
     unreadCount,
@@ -59,31 +82,14 @@ export function NewsHomeScreen() {
     clearAllNotifications,
     latestBannerNotification,
     dismissBanner,
-  } = useNotificationsFeed(user?.phone);
-
-  const [selectedNews, setSelectedNews] = useState<NewsCardItem | null>(null);
-  const [showSearch, setShowSearch] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [showNotificationsModal, setShowNotificationsModal] =
-    useState<boolean>(false);
+  } = useNotificationsFeed(user?.phone, (data) =>
+    navigateByNotificationTarget(data.section, data.target_id)
+  );
 
   const handleNotificationSelect = (item: VillageNotificationItem) => {
     dismissNotification(item.id);
     dismissBanner();
-    setShowNotificationsModal(false);
-    if (item.section === 'reports') {
-      router.push('/reports');
-    } else if (item.section === 'craftsmen') {
-      router.push('/craftsmen');
-    } else if (item.section === 'services') {
-      router.push('/services');
-    } else if (item.section === 'news' && item.target_id && feed) {
-      const allNews = [...(feed.pinned_featured || []), ...(feed.small_news || [])];
-      const target = allNews.find((n) => n.id === item.target_id);
-      if (target) {
-        setSelectedNews(target);
-      }
-    }
+    navigateByNotificationTarget(item.section, item.target_id);
   };
 
   const scrollViewRef = useRef<React.ElementRef<typeof ScrollView>>(null);

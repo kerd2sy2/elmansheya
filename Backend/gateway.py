@@ -272,7 +272,7 @@ def _send_fcm_v1_message(access_tok, project_id, target_key, target_val, title, 
             'data': str_data,
             'android': {
                 'priority': 'high',
-                'notification': {'channel_id': 'default', 'sound': 'default'},
+                'notification': {'channel_id': 'elmansheya_high_alerts_v1', 'sound': 'default'},
             },
         }
     }, ensure_ascii=False).encode('utf-8')
@@ -309,6 +309,7 @@ def dispatch_push_to_tokens(title, body, data):
                     'body': body,
                     'data': data,
                     'priority': 'high',
+                    'channelId': 'elmansheya_high_alerts_v1',
                 })
             else:
                 raw_fcm_tokens.append(t)
