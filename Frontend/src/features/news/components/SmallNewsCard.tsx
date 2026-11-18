@@ -211,21 +211,7 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
                 {roleTitle}
               </Text>
             </View>
-
-            {/* السطر الثالث: وقت وتاريخ النشر */}
-            <View style={styles.timeDateRow}>
-              <Ionicons name="time-outline" size={11} color="#94A3B8" />
-              <Text style={styles.timeText}>{time}</Text>
-              <Text style={styles.dotSeparator}>•</Text>
-              <Text style={styles.dateText}>{date}</Text>
-            </View>
           </View>
-        </View>
-
-        {/* أيقونة المشاهدات على الشمال بالرقم فقط وبدون كلمة مشاهدة */}
-        <View style={styles.viewsWrap}>
-          <Ionicons name="eye-outline" size={13.5} color="#94A3B8" />
-          <Text style={styles.viewsText}>{item.views_count}</Text>
         </View>
       </View>
 
@@ -289,6 +275,21 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
           />
         </View>
       ) : null}
+
+      {/* ٥. السطر السفلي: التاريخ والوقت على اليمين، والمشاهدات بالرقم فقط على الشمال */}
+      <View style={styles.bottomMetaRow}>
+        <View style={styles.timeDateRow}>
+          <Ionicons name="time-outline" size={11.5} color="#94A3B8" />
+          <Text style={styles.timeText}>{time}</Text>
+          <Text style={styles.dotSeparator}>•</Text>
+          <Text style={styles.dateText}>{date}</Text>
+        </View>
+
+        <View style={styles.viewsWrap}>
+          <Ionicons name="eye-outline" size={13.5} color="#94A3B8" />
+          <Text style={styles.viewsText}>{item.views_count}</Text>
+        </View>
+      </View>
     </View>
   );
 });
@@ -444,12 +445,18 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: '#0F172A',
   },
+  bottomMetaRow: {
+    flexDirection: rtlFlexDirection,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginTop: 8,
+    paddingTop: 2,
+  },
   viewsWrap: {
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
     gap: 4,
-    paddingTop: 3,
-    paddingHorizontal: 2,
   },
   viewsText: {
     fontSize: 11.5,

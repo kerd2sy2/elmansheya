@@ -11,17 +11,15 @@ function SkeletonCard({
 }) {
   return (
     <View style={styles.card}>
-      {/* رأس الكارت: صورة الناشر والمعلومات + المشاهدات على الشمال */}
+      {/* رأس الكارت: صورة الناشر والمعلومات */}
       <View style={styles.headerRow}>
         <View style={styles.authorGroup}>
           <Animated.View style={[styles.avatar, { opacity: pulseAnim }]} />
           <View style={styles.authorInfoCol}>
             <Animated.View style={[styles.bar, styles.authorNameBar, { opacity: pulseAnim }]} />
             <Animated.View style={[styles.bar, styles.authorRoleBar, { opacity: pulseAnim }]} />
-            <Animated.View style={[styles.bar, styles.timeBar, { opacity: pulseAnim }]} />
           </View>
         </View>
-        <Animated.View style={[styles.bar, styles.viewsBar, { opacity: pulseAnim }]} />
       </View>
 
       {/* عنوان البوست */}
@@ -39,6 +37,12 @@ function SkeletonCard({
       {hasMedia ? (
         <Animated.View style={[styles.mediaBox, { opacity: pulseAnim }]} />
       ) : null}
+
+      {/* السطر السفلي: التاريخ على اليمين والمشاهدات على الشمال */}
+      <View style={styles.bottomMetaRow}>
+        <Animated.View style={[styles.bar, styles.timeBar, { opacity: pulseAnim }]} />
+        <Animated.View style={[styles.bar, styles.viewsBar, { opacity: pulseAnim }]} />
+      </View>
     </View>
   );
 }
@@ -157,10 +161,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     marginBottom: 4,
   },
+  bottomMetaRow: {
+    flexDirection: rtlFlexDirection,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginTop: 8,
+    paddingTop: 2,
+  },
   viewsBar: {
     width: 45,
-    height: 14,
+    height: 12,
     borderRadius: 6,
-    marginTop: 4,
   },
 });
