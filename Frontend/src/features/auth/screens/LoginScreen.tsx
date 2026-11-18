@@ -72,9 +72,11 @@ export function LoginScreen() {
 
   // رمز التحقق ومؤقت إعادة الإرسال المتصاعد (1، 2، 4، 8، 16 دقيقة...)
   const [otpCode, setOtpCode] = useState<string>('');
+  const [wrongOtpAttempts, setWrongOtpAttempts] = useState<number>(0);
   const [otpAttemptCount, setOtpAttemptCount] = useState<number>(0);
   const [cooldownEndTime, setCooldownEndTime] = useState<number>(0);
   const [resendTimer, setResendTimer] = useState<number>(0);
+  const isOtpLocked = wrongOtpAttempts >= 3;
 
   // بيانات المواطن الجديد
   const [newFullName, setNewFullName] = useState<string>('');
@@ -271,6 +273,7 @@ export function LoginScreen() {
       const nextEndTime = Date.now() + cooldownSeconds * 1000;
 
       setOtpCode('');
+      setWrongOtpAttempts(0);
       setOtpAttemptCount(nextAttemptCount);
       setCooldownEndTime(nextEndTime);
       setResendTimer(cooldownSeconds);
@@ -289,6 +292,10 @@ export function LoginScreen() {
   };
 
   const handleVerifyOtp = async (codeToVerify?: string) => {
+    if (wrongOtpAttempts >= 3) {
+      return;
+    }
+
     const code = (codeToVerify ?? otpCode).trim();
     if (!code || code.length < 4) {
       setErrorText('يرجى إدخال رمز التحقق المكون من 4 أرقام.');
@@ -305,12 +312,19 @@ export function LoginScreen() {
       const res = await verifyWhatsAppOtp(fullPhone, code, fp);
 
       if (!res.ok) {
-        setErrorText(res.error || 'رمز التحقق غير صحيح، يرجى المحاولة مرة أخرى.');
+        const nextWrong = wrongOtpAttempts + 1;
+        setWrongOtpAttempts(nextWrong);
+        if (nextWrong >= 3) {
+          setErrorText('تم إدخال رمز خاطئ 3 مرات. تم إيقاف التأكيد حتى تطلب رمزاً جديداً.');
+        } else {
+          setErrorText(res.error || 'رمز التحقق غير صحيح، يرجى المحاولة مرة أخرى.');
+        }
         setSubmitting(false);
         return;
       }
 
-      // تصفير عداد المضاعفة بمجرد نجاح التحقق
+      // تصفير عداد المضاعفة ومحاولات الخطأ بمجرد نجاح التحقق
+      setWrongOtpAttempts(0);
       setOtpAttemptCount(0);
       setCooldownEndTime(0);
       setResendTimer(0);
@@ -564,11 +578,13 @@ export function LoginScreen() {
                     ref={otpInputRef}
                     style={styles.hiddenOtpInput}
                     value={otpCode}
+                    editable={!isOtpLocked && !submitting}
                     onChangeText={(val) => {
+                      if (isOtpLocked) return;
                       const clean = val.replace(/[^0-9]/g, '').slice(0, 4);
                       setOtpCode(clean);
                       setErrorText(null);
-                      if (clean.length === 4) {
+                      if (clean.length === 4 && !isOtpLocked) {
                         handleVerifyOtp(clean);
                       }
                     }}
@@ -582,11 +598,12 @@ export function LoginScreen() {
                 <Pressable
                   style={({ pressed }) => [
                     styles.primaryBtn,
-                    (otpCode.length < 4 || submitting) && styles.primaryBtnDisabled,
-                    pressed && styles.primaryBtnPressed,
+                    (otpCode.length < 4 || submitting || isOtpLocked) &&
+                      styles.primaryBtnDisabled,
+                    pressed && !isOtpLocked && styles.primaryBtnPressed,
                   ]}
                   onPress={() => handleVerifyOtp()}
-                  disabled={otpCode.length < 4 || submitting}>
+                  disabled={otpCode.length < 4 || submitting || isOtpLocked}>
                   {submitting ? (
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (

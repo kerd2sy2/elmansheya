@@ -393,7 +393,8 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 PENDING_OTPS[clean_phone] = {
                     "code": code,
                     "expires_at": time.time() + 300,
-                    "device_fingerprint": device_fp
+                    "device_fingerprint": device_fp,
+                    "wrong_attempts": 0
                 }
 
                 # استدعاء خدمة الواتساب المحلية لإرسال الكود
@@ -445,8 +446,19 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     clean_phone = '0' + clean_phone[3:]
 
                 item = PENDING_OTPS.get(clean_phone)
-                # مطابقة الكود
-                if not item or item.get('code') != code or time.time() > item.get('expires_at', 0):
+                # فحص وجود الكود وصلاحيته ثم تتبع محاولات الإدخال الخاطئة
+                if not item or time.time() > item.get('expires_at', 0):
+                    if item and clean_phone in PENDING_OTPS:
+                        del PENDING_OTPS[clean_phone]
+                    self.send_json({"success": False, "error": "كود التحقق غير صحيح أو انتهت صلاحيته"}, 400)
+                    return
+
+                if item.get('code') != code:
+                    item['wrong_attempts'] = item.get('wrong_attempts', 0) + 1
+                    if item['wrong_attempts'] >= 3:
+                        del PENDING_OTPS[clean_phone]
+                        self.send_json({"success": False, "error": "تم إدخال رمز خاطئ 3 مرات. يرجى طلب رمز جديد"}, 400)
+                        return
                     self.send_json({"success": False, "error": "كود التحقق غير صحيح أو انتهت صلاحيته"}, 400)
                     return
 
