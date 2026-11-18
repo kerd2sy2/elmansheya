@@ -12,7 +12,6 @@ import {
   View,
 } from 'react-native';
 import { APP_THEME } from '@/core/theme/colors';
-import { rtlTextAlign } from '@/core/theme/rtl';
 import {
   NotificationSectionKey,
   VillageNotificationItem,
@@ -145,51 +144,6 @@ export const NotificationsModal = memo(function NotificationsModal({
         </Pressable>
       </Pressable>
     </Modal>
-  );
-});
-
-interface IncomingNotificationBannerProps {
-  notification: VillageNotificationItem | null;
-  topOffset: number;
-  onPress: (item: VillageNotificationItem) => void;
-  onDismiss: () => void;
-}
-
-export const IncomingNotificationBanner = memo(function IncomingNotificationBanner({
-  notification,
-  topOffset,
-  onPress,
-  onDismiss,
-}: IncomingNotificationBannerProps) {
-  if (!notification) return null;
-  const meta = SECTION_META[notification.section] || SECTION_META.general;
-
-  return (
-    <View style={[styles.bannerWrap, { top: topOffset }]} pointerEvents="box-none">
-      <Pressable
-        style={styles.bannerCard}
-        onPress={() => onPress(notification)}>
-        <Pressable onPress={onDismiss} hitSlop={8} style={styles.bannerCloseBtn}>
-          <Ionicons name="close" size={16} color="#64748B" />
-        </Pressable>
-
-        <View style={styles.bannerTextCol}>
-          <Text style={styles.bannerSectionLabel}>
-            {notification.section_ar}
-          </Text>
-          <Text style={styles.bannerTitle} numberOfLines={1}>
-            {notification.title}
-          </Text>
-          <Text style={styles.bannerBody} numberOfLines={1}>
-            {notification.body}
-          </Text>
-        </View>
-
-        <View style={[styles.bannerIconWrap, { backgroundColor: meta.bg }]}>
-          <Ionicons name={meta.icon} size={20} color={meta.color} />
-        </View>
-      </Pressable>
-    </View>
   );
 });
 
@@ -330,58 +284,5 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '700',
     color: APP_THEME.primary,
-  },
-  bannerWrap: {
-    position: 'absolute',
-    left: 14,
-    right: 14,
-    zIndex: 999,
-  },
-  bannerCard: {
-    direction: 'ltr',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: APP_THEME.primaryBorder,
-    borderRadius: 16,
-    padding: 12,
-    elevation: 8,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.14,
-    shadowRadius: 10,
-  },
-  bannerCloseBtn: {
-    padding: 4,
-  },
-  bannerTextCol: {
-    flex: 1,
-    alignItems: 'flex-end',
-    gap: 2,
-  },
-  bannerSectionLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: APP_THEME.primary,
-  },
-  bannerTitle: {
-    fontSize: 13.5,
-    fontWeight: '800',
-    color: '#0F172A',
-    textAlign: rtlTextAlign,
-  },
-  bannerBody: {
-    fontSize: 12,
-    color: '#475569',
-    textAlign: rtlTextAlign,
-  },
-  bannerIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

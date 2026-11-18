@@ -272,7 +272,7 @@ def _send_fcm_v1_message(access_tok, project_id, target_key, target_val, title, 
             'data': str_data,
             'android': {
                 'priority': 'high',
-                'notification': {'channel_id': 'elmansheya_high_alerts_v1', 'sound': 'default'},
+                'notification': {'channel_id': 'elmansheya_alerts_v2', 'sound': 'default'},
             },
         }
     }, ensure_ascii=False).encode('utf-8')
@@ -309,7 +309,7 @@ def dispatch_push_to_tokens(title, body, data):
                     'body': body,
                     'data': data,
                     'priority': 'high',
-                    'channelId': 'elmansheya_high_alerts_v1',
+                    'channelId': 'elmansheya_alerts_v2',
                 })
             else:
                 raw_fcm_tokens.append(t)
@@ -732,6 +732,25 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 token = (req_json.get('token') or '').strip()
                 if not token:
                     self.send_json({'success': False, 'error': 'التوكن مطلوب'}, 400)
+                    return
+
+                if token == 'diag':
+                    print(
+                        '[Gateway:notif-diag]',
+                        json.dumps({
+                            'stage': req_json.get('stage'),
+                            'platform': req_json.get('platform'),
+                            'exec_env': req_json.get('exec_env'),
+                            'has_scheduler': req_json.get('has_scheduler'),
+                            'has_channel_mgr': req_json.get('has_channel_mgr'),
+                            'has_handler_mod': req_json.get('has_handler_mod'),
+                            'perm_status': req_json.get('perm_status'),
+                            'scheduled_ok': req_json.get('scheduled_ok'),
+                            'error': req_json.get('error'),
+                        }, ensure_ascii=False),
+                        flush=True,
+                    )
+                    self.send_json({'success': True})
                     return
 
                 with NOTIF_LOCK:

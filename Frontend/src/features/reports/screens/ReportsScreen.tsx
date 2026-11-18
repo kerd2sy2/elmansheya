@@ -850,7 +850,7 @@ export function ReportsScreen() {
 }
 
 const styles = StyleSheet.create({
-  screenContainer: { flex: 1, backgroundColor: '#F8FAFC' },
+  screenContainer: { flex: 1, backgroundColor: '#FAF5EE' },
   content: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 5 },
   reportsList: { gap: 14 },
   fixedHeader: {
@@ -859,7 +859,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAF5EE',
     borderBottomWidth: 0,
     zIndex: 10,
   },

@@ -330,7 +330,7 @@ export function NewsDetailScreen({
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FAF5EE',
   },
   topBar: {
     flexDirection: rtlFlexDirection,
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FAF5EE',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },

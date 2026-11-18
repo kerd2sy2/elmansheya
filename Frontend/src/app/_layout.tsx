@@ -10,7 +10,7 @@ import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-c
 if (Platform.OS === 'android') {
   (RNStatusBar as any).setTranslucent?.(true);
   (RNStatusBar as any).setBackgroundColor?.('transparent');
-  SystemUI.setBackgroundColorAsync('#F8FAFC').catch(() => {});
+  SystemUI.setBackgroundColorAsync('#FAF5EE').catch(() => {});
 }
 
 // تثبيت اتجاه الواجهة لتطبيق العربية المنضبط (RTL عبر التخطيط الصريح لتفادي عيوب الهواتف)
@@ -142,6 +142,6 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAF5EE',
   },
 });

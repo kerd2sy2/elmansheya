@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAF5EE',
   },
   card: {
     width: '100%',

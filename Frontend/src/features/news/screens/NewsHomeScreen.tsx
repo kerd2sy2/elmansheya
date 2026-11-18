@@ -29,10 +29,7 @@ import { API_BASE_URL } from '@/core/config/api.config';
 import { WidgetErrorBoundary } from '@/core/error-boundary/WidgetErrorBoundary';
 import { registerHomeScrollToTop } from '@/core/events/scrollEvents';
 import { useAuth } from '@/features/auth/context/AuthContext';
-import {
-  IncomingNotificationBanner,
-  NotificationsModal,
-} from '@/features/notifications/components/NotificationsModal';
+import { NotificationsModal } from '@/features/notifications/components/NotificationsModal';
 import { useNotificationsFeed } from '@/features/notifications/hooks/useNotificationsFeed';
 import { VillageNotificationItem } from '@/features/notifications/types/notifications.types';
 import { publishRealNewsArticle } from '../api/news.api';
@@ -80,15 +77,12 @@ export function NewsHomeScreen() {
     refresh: refreshNotifications,
     dismissNotification,
     clearAllNotifications,
-    latestBannerNotification,
-    dismissBanner,
   } = useNotificationsFeed(user?.phone, (data) =>
     navigateByNotificationTarget(data.section, data.target_id)
   );
 
   const handleNotificationSelect = (item: VillageNotificationItem) => {
     dismissNotification(item.id);
-    dismissBanner();
     navigateByNotificationTarget(item.section, item.target_id);
   };
 
@@ -536,13 +530,6 @@ export function NewsHomeScreen() {
         </WidgetErrorBoundary>
       </ScrollView>
 
-      <IncomingNotificationBanner
-        notification={latestBannerNotification}
-        topOffset={topInset + 8}
-        onPress={handleNotificationSelect}
-        onDismiss={dismissBanner}
-      />
-
       {/* موديول الإشعارات الموحّد لجميع أقسام التطبيق */}
       <NotificationsModal
         visible={showNotificationsModal}
@@ -574,7 +561,7 @@ export function NewsHomeScreen() {
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAF5EE',
   },
   statusBarShield: {
     position: 'absolute',
@@ -582,7 +569,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 150,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAF5EE',
   },
   collapsibleHeaderWrap: {
     position: 'absolute',
@@ -592,7 +579,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 4,
     paddingBottom: 8,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAF5EE',
   },
   newNewsBannerWrap: {
     position: 'absolute',
@@ -698,7 +685,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 4,
     borderWidth: 1.5,
-    borderColor: '#F8FAFC',
+    borderColor: '#FAF5EE',
   },
   notifCountText: {
     color: '#FFFFFF',

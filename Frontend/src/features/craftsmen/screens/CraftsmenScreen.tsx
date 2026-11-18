@@ -702,16 +702,16 @@ export function CraftsmenScreen() {
 }
 
 const styles = StyleSheet.create({
-  screenContainer: { flex: 1, backgroundColor: '#F8FAFC' },
+  screenContainer: { flex: 1, backgroundColor: '#FAF5EE' },
   tabContainer: { flex: 1, width: '100%' },
   fixedHeaderArea: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAF5EE',
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 4,
   },
   fixedSubHeaderBox: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAF5EE',
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 4,

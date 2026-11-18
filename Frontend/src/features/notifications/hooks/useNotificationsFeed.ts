@@ -41,14 +41,11 @@ export function useNotificationsFeed(
   const [notifState, setNotifState] = useState<StoredNotifState>(DEFAULT_STORED_STATE);
   const [stateLoaded, setStateLoaded] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
-  const [latestBannerNotification, setLatestBannerNotification] =
-    useState<VillageNotificationItem | null>(null);
 
   const initialLoadedRef = useRef<boolean>(false);
   const highestSeenTimestampRef = useRef<number>(0);
   const stateRef = useRef<StoredNotifState>(DEFAULT_STORED_STATE);
   const allNotifsRef = useRef<VillageNotificationItem[]>([]);
-  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onOsTapRef = useRef(onOsTapNavigate);
   onOsTapRef.current = onOsTapNavigate;
 
@@ -58,36 +55,19 @@ export function useNotificationsFeed(
     await setSecureItem(NOTIF_STATE_STORAGE_KEY, nextState);
   }, []);
 
-  const dismissBanner = useCallback(() => {
-    if (bannerTimerRef.current) {
-      clearTimeout(bannerTimerRef.current);
-      bannerTimerRef.current = null;
-    }
-    setLatestBannerNotification(null);
-  }, []);
-
-  const triggerBanner = useCallback(
-    (item: VillageNotificationItem) => {
-      dismissBanner();
-      setLatestBannerNotification(item);
-      presentOsStatusBarNotification(item);
-      try {
-        if (Platform.OS !== 'web') {
-          Vibration.vibrate([0, 220, 120, 280]);
-        }
-      } catch {
-        // ignore vibration failure
+  const deliverOsNotification = useCallback((item: VillageNotificationItem) => {
+    presentOsStatusBarNotification(item);
+    try {
+      if (Platform.OS !== 'web') {
+        Vibration.vibrate([0, 220, 120, 280]);
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
-        () => {}
-      );
-      bannerTimerRef.current = setTimeout(() => {
-        setLatestBannerNotification(null);
-        bannerTimerRef.current = null;
-      }, 7000);
-    },
-    [dismissBanner]
-  );
+    } catch {
+      // ignore vibration failure
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+      () => {}
+    );
+  }, []);
 
   const refresh = useCallback(async () => {
     const items = await fetchNotificationsFeed();
@@ -120,15 +100,14 @@ export function useNotificationsFeed(
         );
       });
       if (newestFresh) {
-        const nextBannerTs = Math.max(
-          current.lastBannerTimestamp || 0,
-          Number(newestFresh.timestamp || 0)
-        );
         persistNotifState({
           ...current,
-          lastBannerTimestamp: nextBannerTs,
+          lastBannerTimestamp: Math.max(
+            current.lastBannerTimestamp || 0,
+            Number(newestFresh.timestamp || 0)
+          ),
         });
-        triggerBanner(newestFresh);
+        deliverOsNotification(newestFresh);
       }
       return;
     }
@@ -151,10 +130,10 @@ export function useNotificationsFeed(
             Number(newest.timestamp || 0)
           ),
         });
-        triggerBanner(newest);
+        deliverOsNotification(newest);
       }
     }
-  }, [persistNotifState, triggerBanner]);
+  }, [deliverOsNotification, persistNotifState]);
 
   const dismissNotification = useCallback(
     async (id: string) => {
@@ -207,7 +186,6 @@ export function useNotificationsFeed(
       if (data.id) {
         dismissNotification(data.id);
       }
-      dismissBanner();
       onOsTapRef.current?.(data);
     });
     const timer = setInterval(() => {
@@ -219,11 +197,8 @@ export function useNotificationsFeed(
       unsubscribeRefresh();
       unsubscribeOsTap();
       clearInterval(timer);
-      if (bannerTimerRef.current) {
-        clearTimeout(bannerTimerRef.current);
-      }
     };
-  }, [dismissBanner, dismissNotification, refresh, userPhone]);
+  }, [dismissNotification, refresh, userPhone]);
 
   const notifications = useMemo(() => {
     if (!stateLoaded) return [];
@@ -264,7 +239,5 @@ export function useNotificationsFeed(
     refresh,
     dismissNotification,
     clearAllNotifications,
-    latestBannerNotification,
-    dismissBanner,
   };
 }

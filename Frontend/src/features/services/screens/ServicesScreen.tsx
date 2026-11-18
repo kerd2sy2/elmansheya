@@ -219,7 +219,7 @@ export function ServicesScreen() {
 }
 
 const styles = StyleSheet.create({
-  screenContainer: { flex: 1, backgroundColor: '#F8FAFC' },
+  screenContainer: { flex: 1, backgroundColor: '#FAF5EE' },
   content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 5 },
   headerRow: {
     flexDirection: rtlFlexDirection,

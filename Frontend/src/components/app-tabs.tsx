@@ -191,6 +191,9 @@ export default function AppTabs() {
         headerShown: false,
         lazy: false,
         animation: 'none',
+        sceneStyle: {
+          backgroundColor: '#FAF5EE',
+        },
         tabBarStyle: {
           position: 'absolute',
           backgroundColor: 'transparent',

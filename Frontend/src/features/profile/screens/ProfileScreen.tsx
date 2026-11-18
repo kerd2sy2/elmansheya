@@ -1145,7 +1145,7 @@ export function ProfileScreen() {
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAF5EE',
   },
   topStickyHeader: {
     flexDirection: rtlFlexDirection,
