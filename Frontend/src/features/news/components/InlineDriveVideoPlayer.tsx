@@ -157,50 +157,61 @@ function NativeExoPlayerView({
     }
   };
 
-  // تبديل الصوت
-  const handleToggleMute = (e: any) => {
+  // تبديل الصوت بشكل موثوق وسلس
+  const handleToggleMute = (e?: any) => {
     e?.stopPropagation?.();
     if (!player) return;
-    player.muted = !player.muted;
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+    try {
+      player.muted = nextMuted;
+      if (!nextMuted) {
+        player.volume = 1.0;
+      }
+    } catch {}
   };
 
   return (
-    <Pressable
+    <View
       style={[
         styles.container,
         height ? { height } : { width: '100%', aspectRatio: videoAspectRatio },
-      ]}
-      onPress={handleTogglePlayPause}
-      accessibilityLabel="تشغيل أو إيقاف الفيديو">
-      <VideoView
-        ref={videoViewRef}
-        style={styles.nativeVideo}
-        player={player}
-        nativeControls={false}
-        allowsFullscreen={false}
-        contentFit="contain"
-      />
+      ]}>
+      {/* منطقة الفيديو القابلة للضغط للتشغيل والإيقاف المؤقت فقط */}
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onPress={handleTogglePlayPause}
+        accessibilityLabel="تشغيل أو إيقاف الفيديو">
+        <VideoView
+          ref={videoViewRef}
+          style={styles.nativeVideo}
+          player={player}
+          nativeControls={false}
+          allowsFullscreen={false}
+          contentFit="contain"
+        />
 
-      {/* زر التشغيل الشفاف في المنتصف عند التوقف المؤقت */}
-      {!isPlaying ? (
-        <View style={styles.centerPlayOverlay} pointerEvents="none">
-          <View style={styles.centerPlayCircle}>
-            <Ionicons
-              name="play"
-              size={32}
-              color="#FFFFFF"
-              style={{ marginLeft: I18nManager.isRTL ? -2 : 3 }}
-            />
+        {/* زر التشغيل الشفاف في المنتصف عند التوقف المؤقت */}
+        {!isPlaying ? (
+          <View style={styles.centerPlayOverlay} pointerEvents="none">
+            <View style={styles.centerPlayCircle}>
+              <Ionicons
+                name="play"
+                size={32}
+                color="#FFFFFF"
+                style={{ marginLeft: I18nManager.isRTL ? -2 : 3 }}
+              />
+            </View>
           </View>
-        </View>
-      ) : null}
+        ) : null}
+      </Pressable>
 
-      {/* أزرار التحكم الأنيقة أسفل الفيديو: كتم/فتح الصوت فقط */}
+      {/* زر كتم وفتح الصوت: في طبقة علوية مستقلة تماماً عن مساحة ضغط الفيديو */}
       <View style={styles.controlsBottomRow} pointerEvents="box-none">
         <Pressable
           style={styles.circleControlBtn}
           onPress={handleToggleMute}
-          hitSlop={8}
+          hitSlop={12}
           accessibilityLabel="كتم أو تشغيل الصوت">
           <Ionicons
             name={isMuted ? 'volume-mute' : 'volume-high'}
@@ -209,7 +220,7 @@ function NativeExoPlayerView({
           />
         </Pressable>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -322,6 +333,43 @@ export function InlineDriveVideoPlayer({
     }
   };
 
+  // إدارة الذاكرة الاحترافية لمنع OutOfMemoryError نهائياً:
+  // لا نقوم بإنشاء مشغل الفيديو الأصيل في الذاكرة إلا إذا كان المنشور نشطاً في الشاشة أو أراد المستخدم تشغيله
+  // وبذلك تكون هناك نسخة مشغل واحدة فقط في الذاكرة بدلاً من ٣٠ مشغل!
+  const shouldMountPlayer = isActive || userWantsToPlay;
+
+  if (!shouldMountPlayer) {
+    return (
+      <Pressable
+        style={[styles.container, containerDimension]}
+        onPress={() => setUserWantsToPlay(true)}
+        accessibilityLabel="تشغيل الفيديو المدمج">
+        {coverImageUrl ? (
+          <Image
+            source={{ uri: coverImageUrl }}
+            style={styles.coverImage}
+            contentFit="cover"
+            transition={200}
+          />
+        ) : (
+          <View style={[styles.coverImage, styles.darkPoster]}>
+            <Ionicons name="film-outline" size={42} color="#334155" />
+          </View>
+        )}
+        <View style={styles.centerPlayOverlay} pointerEvents="none">
+          <View style={styles.centerPlayCircle}>
+            <Ionicons
+              name="play"
+              size={32}
+              color="#FFFFFF"
+              style={{ marginLeft: I18nManager.isRTL ? -2 : 3 }}
+            />
+          </View>
+        </View>
+      </Pressable>
+    );
+  }
+
   // ١. المشغل الأصيل فائق السرعة عبر مكتبة expo-video (ExoPlayer للأندرويد)
   if (ExpoVideoModule && directStreamUrl) {
     return (
@@ -345,43 +393,6 @@ export function InlineDriveVideoPlayer({
     );
   }
 
-  // ٣. غلاف أنيق في حال كانت نسخة الـ APK قديمة بدون الوحدات الأصلية
-  if (!userWantsToPlay) {
-    return (
-      <Pressable
-        style={[styles.container, containerDimension]}
-        onPress={() => setUserWantsToPlay(true)}
-        accessibilityLabel="تشغيل الفيديو المدمج">
-        {coverImageUrl ? (
-          <Image
-            source={{ uri: coverImageUrl }}
-            style={styles.coverImage}
-            contentFit="cover"
-            transition={200}
-          />
-        ) : (
-          <View style={[styles.coverImage, styles.darkPoster]}>
-            <Ionicons name="film-outline" size={42} color="#334155" />
-          </View>
-        )}
-        <View style={styles.playOverlay}>
-          <View style={styles.playCircle}>
-            <Ionicons
-              name="play"
-              size={32}
-              color="#FFFFFF"
-              style={{ marginLeft: I18nManager.isRTL ? -2 : 3 }}
-            />
-          </View>
-          <View style={styles.badgeWrap}>
-            <Ionicons name="videocam" size={14} color="#FFFFFF" />
-            <Text style={styles.badgeText}>فيديو عالي الجودة (HD) - اضغط للتشغيل</Text>
-          </View>
-        </View>
-      </Pressable>
-    );
-  }
-
   return (
     <Pressable
       style={[styles.container, styles.fallbackContainer, containerDimension]}
@@ -401,8 +412,7 @@ export function InlineDriveVideoPlayer({
           style={{ marginLeft: I18nManager.isRTL ? -2 : 3 }}
         />
       </View>
-      <Text style={styles.fallbackTitle}>تشغيل الفيديو السحابي المرفق</Text>
-      <Text style={styles.fallbackSub}>بث مباشر عالي الجودة بدون تنزيل</Text>
+      <Text style={styles.fallbackTitle}>تشغيل الفيديو</Text>
     </Pressable>
   );
 }
