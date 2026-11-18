@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   I18nManager,
@@ -18,6 +18,10 @@ import {
   getDirectVideoUrl,
   getGoogleDrivePreviewUrl,
 } from '@/core/utils/googleDrive';
+import {
+  shouldAutoPlayVideoNow,
+  subscribeToAutoPlaySetting,
+} from '@/core/storage/videoSettingsStorage';
 
 // فحص وجود وحدة الفيديو الأصلية في نسخة التطبيق المترجمة (ExoPlayer Native)
 const hasNativeExpoVideo = Boolean(requireOptionalNativeModule('ExpoVideo'));
@@ -122,8 +126,32 @@ export function InlineDriveVideoPlayer({
   coverImageUrl,
   height = 240,
 }: InlineDriveVideoPlayerProps) {
-  // حماية الذاكرة: لا يتم تفعيل أو تحميل الفيديو في الذاكرة إلا عند ضغط المستخدم الفعلي على زر التشغيل
+  // الحالة المبدئية: لا يتم تشغيل الفيديو إلا إذا كان المستخدم على Wi-Fi ومفعل التشغيل التلقائي
   const [userWantsToPlay, setUserWantsToPlay] = useState<boolean>(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    shouldAutoPlayVideoNow().then((canAutoPlay) => {
+      if (isMounted && canAutoPlay) {
+        setUserWantsToPlay(true);
+      }
+    });
+
+    const unsubscribe = subscribeToAutoPlaySetting((enabled) => {
+      if (!enabled) {
+        if (isMounted) setUserWantsToPlay(false);
+      } else {
+        shouldAutoPlayVideoNow().then((canAutoPlay) => {
+          if (isMounted) setUserWantsToPlay(canAutoPlay);
+        });
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   const fileId = extractGoogleDriveFileId(videoUrl);
   const directStreamUrl = getDirectVideoUrl(videoUrl);

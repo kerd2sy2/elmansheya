@@ -42,6 +42,10 @@ import {
   TimelineStep,
   generateTimelineSteps,
 } from '@/features/reports/storage/myReportsStorage';
+import {
+  getAutoPlayOnWifiSetting,
+  setAutoPlayOnWifiSetting,
+} from '@/core/storage/videoSettingsStorage';
 
 export function ProfileScreen() {
   const topInset = useSafeTopInset();
@@ -77,6 +81,19 @@ export function ProfileScreen() {
   const [selectedReportForTracking, setSelectedReportForTracking] = useState<MyReportItem | null>(null);
   const [myReports, setMyReports] = useState<MyReportItem[]>([]);
   const [showMyReportsPage, setShowMyReportsPage] = useState<boolean>(false);
+  const [autoPlayOnWifi, setAutoPlayOnWifi] = useState<boolean>(true);
+
+  useEffect(() => {
+    getAutoPlayOnWifiSetting().then(setAutoPlayOnWifi);
+  }, []);
+
+  const handleToggleAutoPlayOnWifi = async (val: boolean) => {
+    setAutoPlayOnWifi(val);
+    await setAutoPlayOnWifiSetting(val);
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {}
+  };
 
   // إدارة زر الرجوع الفيزيائي: الرجوع خطوة واحدة دائماً إلى شاشة الملف الشخصي
   useFocusEffect(
@@ -805,6 +822,25 @@ export function ProfileScreen() {
           />
         </View>
 
+        {/* إعداد تشغيل الفيديو التلقائي على شبكات Wi-Fi فقط */}
+        <View style={styles.bioCardStandalone}>
+          <View style={styles.bioRightCol}>
+            <Ionicons name="wifi-outline" size={22} color="#64748B" />
+            <View style={styles.settingTextCol}>
+              <Text style={styles.bioTitle}>تشغيل الفيديو تلقائياً</Text>
+              <Text style={styles.settingSubTitle}>
+                على شبكات Wi-Fi فقط لتوفير باقة بيانات الهاتف
+              </Text>
+            </View>
+          </View>
+          <Switch
+            value={autoPlayOnWifi}
+            onValueChange={handleToggleAutoPlayOnWifi}
+            trackColor={{ false: '#E2E8F0', true: '#FED7AA' }}
+            thumbColor={autoPlayOnWifi ? '#973c00' : '#FFFFFF'}
+          />
+        </View>
+
         {/* زر تسجيل الخروج بتصميم تيليجرام نظيف تحت البصمة */}
         <Pressable
           style={({ pressed }) => [
@@ -1382,6 +1418,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     flex: 1,
+  },
+  settingTextCol: {
+    flex: 1,
+    gap: 2,
+    alignItems: 'flex-start',
+  },
+  settingSubTitle: {
+    fontSize: 11.5,
+    color: '#64748B',
+    textAlign: rtlTextAlign,
   },
   bioTitle: {
     fontSize: 15,

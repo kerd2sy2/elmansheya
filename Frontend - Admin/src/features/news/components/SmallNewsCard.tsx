@@ -1,31 +1,58 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native';
 import { rtlFlexDirection } from '@/core/theme/rtl';
 import { getDirectImageUrl, getDirectVideoUrl } from '@/core/utils/googleDrive';
 import { InlineDriveVideoPlayer } from '@/features/admin/components/InlineDriveVideoPlayer';
 import { NewsCardItem } from '../types/news.types';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface SmallNewsCardProps {
   item: NewsCardItem;
   onPress?: (item: NewsCardItem) => void;
 }
 
-export function SmallNewsCard({ item, onPress }: SmallNewsCardProps) {
+export function SmallNewsCard({ item }: SmallNewsCardProps) {
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const directCoverUrl = getDirectImageUrl(item.cover_image_url);
   const directVideoUrl = getDirectVideoUrl(item.video_stream_url);
   const hasVideo = Boolean(directVideoUrl);
 
+  const isLongSummary = (item.summary?.length ?? 0) > 110;
+
+  const toggleExpand = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsExpanded((prev) => !prev);
+  };
+
   return (
     <View style={styles.card}>
-      {/* 1. عنوان الخبر وفقرة مختصرة */}
-      <Pressable onPress={() => onPress?.(item)}>
-        <Text style={styles.title}>{item.title}</Text>
-        <Text style={styles.summary} numberOfLines={3}>
-          {item.summary}
-        </Text>
-      </Pressable>
+      {/* 1. عنوان الخبر وفقرة مختصرة تتوسع في نفس الصفحة */}
+      <Text style={styles.title}>{item.title}</Text>
+      <Text
+        style={styles.summary}
+        numberOfLines={isLongSummary && !isExpanded ? 3 : undefined}>
+        {item.summary}
+      </Text>
+      {isLongSummary ? (
+        <Pressable
+          style={styles.expandTextBtn}
+          onPress={toggleExpand}
+          hitSlop={8}>
+          <Text style={styles.expandTextLabel}>
+            {isExpanded ? 'عرض أقل' : 'عرض المزيد...'}
+          </Text>
+          <Ionicons
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            size={14}
+            color="#973c00"
+          />
+        </Pressable>
+      ) : null}
 
       {/* 2. وسائط الخبر: فيديو مدمج يشتغل مباشرة في الصفحة الرئيسية أو صورة الخبر */}
       {hasVideo ? (
@@ -37,16 +64,16 @@ export function SmallNewsCard({ item, onPress }: SmallNewsCardProps) {
           />
         </View>
       ) : directCoverUrl ? (
-        <Pressable onPress={() => onPress?.(item)}>
+        <View style={styles.mediaContainer}>
           <Image
             source={{ uri: directCoverUrl }}
             style={styles.image}
             contentFit="cover"
           />
-        </Pressable>
+        </View>
       ) : null}
 
-      {/* 3. زر المزيد عند وجود نص طويل */}
+      {/* 3. تذييل الخبر */}
       <View style={styles.footer}>
         <View style={styles.metaRow}>
           <Ionicons name="newspaper-outline" size={14} color="#64748B" />
@@ -54,10 +81,6 @@ export function SmallNewsCard({ item, onPress }: SmallNewsCardProps) {
             {item.author_display_name} - {item.published_at}
           </Text>
         </View>
-        <Pressable style={styles.moreButton} onPress={() => onPress?.(item)}>
-          <Text style={styles.moreButtonText}>المزيد</Text>
-          <Ionicons name="chevron-back-outline" size={14} color="#973c00" />
-        </Pressable>
       </View>
     </View>
   );
@@ -87,8 +110,21 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     writingDirection: 'rtl',
     lineHeight: 20,
-    marginBottom: 10,
+    marginBottom: 6,
     width: '100%',
+  },
+  expandTextBtn: {
+    flexDirection: rtlFlexDirection,
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    paddingVertical: 4,
+    marginBottom: 10,
+  },
+  expandTextLabel: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#973c00',
   },
   mediaContainer: {
     width: '100%',
@@ -102,7 +138,6 @@ const styles = StyleSheet.create({
     height: 150,
     borderRadius: 10,
     backgroundColor: '#F1F5F9',
-    marginBottom: 10,
   },
   footer: {
     flexDirection: rtlFlexDirection,
@@ -117,19 +152,5 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 12,
     color: '#64748B',
-  },
-  moreButton: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFF7ED',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  moreButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#973c00',
   },
 });

@@ -36,7 +36,6 @@ import { publishRealNewsArticle } from '../api/news.api';
 import { SmallNewsCard } from '../components/SmallNewsCard';
 import { useNewsFeed } from '../hooks/useNewsFeed';
 import { NewsCardItem } from '../types/news.types';
-import { NewsDetailScreen } from './NewsDetailScreen';
 
 const BASE_HEADER_HEIGHT = 60;
 
@@ -47,7 +46,6 @@ export function NewsHomeScreen() {
   const { user } = useAuth();
   const { feed, loading, refreshing, servedFromCache, isOffline, refresh } =
     useNewsFeed();
-  const [selectedNews, setSelectedNews] = useState<NewsCardItem | null>(null);
   const [showSearch, setShowSearch] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [visibleCount, setVisibleCount] = useState<number>(15);
@@ -62,12 +60,8 @@ export function NewsHomeScreen() {
       router.push('/craftsmen');
     } else if (section === 'services') {
       router.push('/services');
-    } else if (section === 'news' && targetId && feed) {
-      const allNews = [...(feed.pinned_featured || []), ...(feed.small_news || [])];
-      const target = allNews.find((n) => n.id === targetId);
-      if (target) {
-        setSelectedNews(target);
-      }
+    } else if (section === 'news') {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
     }
   };
 
@@ -528,7 +522,6 @@ export function NewsHomeScreen() {
                 <SmallNewsCard
                   key={item.id}
                   item={item}
-                  onPress={setSelectedNews}
                 />
               ))}
               {displayedNews.length > visibleCount ? (
@@ -555,21 +548,6 @@ export function NewsHomeScreen() {
         onClearAll={clearAllNotifications}
         onClose={() => setShowNotificationsModal(false)}
       />
-
-      {/* شاشة تفاصيل الخبر تفتح كـ Modal سلس للغاية وتغلق فورياً بدون أي تأخير أو تهنيج */}
-      <Modal
-        visible={Boolean(selectedNews)}
-        animationType="slide"
-        statusBarTranslucent
-        onRequestClose={() => setSelectedNews(null)}>
-        {selectedNews ? (
-          <NewsDetailScreen
-            newsId={selectedNews.id}
-            initialItem={selectedNews}
-            onClose={() => setSelectedNews(null)}
-          />
-        ) : null}
-      </Modal>
     </View>
   );
 }

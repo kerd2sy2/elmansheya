@@ -1,11 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React from 'react';
-import { I18nManager, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import {
+  I18nManager,
+  LayoutAnimation,
+  Platform,
+  Pressable,
+  Share,
+  StyleSheet,
+  Text,
+  UIManager,
+  View,
+} from 'react-native';
 import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
 import { getDirectImageUrl, getDirectVideoUrl } from '@/core/utils/googleDrive';
 import { InlineDriveVideoPlayer } from './InlineDriveVideoPlayer';
 import { NewsCardItem } from '../types/news.types';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface SmallNewsCardProps {
   item: NewsCardItem;
@@ -134,8 +148,8 @@ export function parseAuthorInfo(
 
 export const SmallNewsCard = React.memo(function SmallNewsCard({
   item,
-  onPress,
 }: SmallNewsCardProps) {
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const { time, date } = formatPublishTimeAndDate(item.published_at);
   const directCoverUrl = getDirectImageUrl(item.cover_image_url);
   const directAvatarUrl = getDirectImageUrl(item.author_avatar_url);
@@ -143,72 +157,104 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
   const hasImage = Boolean(directCoverUrl);
   const hasVideo = Boolean(directVideoUrl);
 
+  const isLongSummary = (item.summary?.length ?? 0) > 110;
+
   const { cleanName, roleTitle } = parseAuthorInfo(
     item.author_display_name,
     item.author_badge_label,
     item.title
   );
 
+  const toggleExpand = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsExpanded((prev) => !prev);
+  };
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        title: item.title,
+        message: `${item.title}\n\n${item.summary}\n\nمن تطبيق المنشية الذكي`,
+      });
+    } catch {
+      // تجاهل الإلغاء
+    }
+  };
+
   return (
     <View style={styles.card}>
-      {/* الرأس والنص قابلان للضغط لفتح التفاصيل */}
-      <Pressable onPress={() => onPress?.(item)} style={styles.cardHeaderPressable}>
-        {/* ١. رأس البوست الأنيق: صورة الناشر، اسمه الصافي، ودوره/قسمه تحته مباشرة */}
-        <View style={styles.header}>
-          <View style={styles.authorRow}>
-            {item.author_avatar_url ? (
-              <Image
-                source={{ uri: directAvatarUrl }}
-                style={styles.avatar}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={styles.avatarFallback}>
-                <Ionicons name="person" size={18} color="#973c00" />
-              </View>
-            )}
+      {/* ١. رأس البوست الأنيق: صورة الناشر، اسمه الصافي، ودوره/قسمه تحته مباشرة */}
+      <View style={styles.header}>
+        <View style={styles.authorRow}>
+          {item.author_avatar_url ? (
+            <Image
+              source={{ uri: directAvatarUrl }}
+              style={styles.avatar}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={styles.avatarFallback}>
+              <Ionicons name="person" size={18} color="#973c00" />
+            </View>
+          )}
 
-            <View style={styles.authorInfoCol}>
-              {/* السطر الأول: اسم الناشر فقط بدون أي أقواس أو مكان بجانبه + علامة التوثيق */}
-              <View style={styles.authorNameRow}>
-                <Text style={styles.authorName} numberOfLines={1}>
-                  {cleanName}
-                </Text>
-                {item.author_is_verified ? (
-                  <Ionicons name="checkmark-circle" size={15} color="#0284C7" />
-                ) : null}
-              </View>
+          <View style={styles.authorInfoCol}>
+            {/* السطر الأول: اسم الناشر فقط بدون أي أقواس أو مكان بجانبه + علامة التوثيق */}
+            <View style={styles.authorNameRow}>
+              <Text style={styles.authorName} numberOfLines={1}>
+                {cleanName}
+              </Text>
+              {item.author_is_verified ? (
+                <Ionicons name="checkmark-circle" size={15} color="#0284C7" />
+              ) : null}
+            </View>
 
-              {/* السطر الثاني: الدور أو القسم باللون الأسود، بدون أيقونة، وبدون بوكس/خلفية */}
-              <View style={styles.authorRoleRow}>
-                <Text style={styles.authorRoleText} numberOfLines={1}>
-                  {roleTitle}
-                </Text>
-              </View>
+            {/* السطر الثاني: الدور أو القسم باللون الأسود، بدون أيقونة، وبدون بوكس/خلفية */}
+            <View style={styles.authorRoleRow}>
+              <Text style={styles.authorRoleText} numberOfLines={1}>
+                {roleTitle}
+              </Text>
+            </View>
 
-              {/* السطر الثالث: وقت وتاريخ النشر */}
-              <View style={styles.timeDateRow}>
-                <Ionicons name="time-outline" size={11} color="#94A3B8" />
-                <Text style={styles.timeText}>{time}</Text>
-                <Text style={styles.dotSeparator}>•</Text>
-                <Text style={styles.dateText}>{date}</Text>
-              </View>
+            {/* السطر الثالث: وقت وتاريخ النشر */}
+            <View style={styles.timeDateRow}>
+              <Ionicons name="time-outline" size={11} color="#94A3B8" />
+              <Text style={styles.timeText}>{time}</Text>
+              <Text style={styles.dotSeparator}>•</Text>
+              <Text style={styles.dateText}>{date}</Text>
             </View>
           </View>
         </View>
+      </View>
 
-        {/* ٢. عنوان المنشور - محاذاة صارمة من اليمين إلى اليسار */}
-        <View style={styles.textWrap}>
-          <Text style={styles.title}>{item.title}</Text>
-        </View>
+      {/* ٢. عنوان المنشور - محاذاة صارمة من اليمين إلى اليسار */}
+      <View style={styles.textWrap}>
+        <Text style={styles.title}>{item.title}</Text>
+      </View>
 
-        {/* ٣. نص / براجراف المنشور - محاذاة صارمة من اليمين إلى اليسار */}
-        <View style={styles.textWrap}>
-          <Text style={styles.summary} numberOfLines={hasImage || hasVideo ? 3 : 5}>
-            {item.summary}
-          </Text>
-        </View>
-      </Pressable>
+      {/* ٣. نص / براجراف المنشور - يتوسع في نفس الصفحة عند وجود نص طويل */}
+      <View style={styles.textWrap}>
+        <Text
+          style={styles.summary}
+          numberOfLines={isLongSummary && !isExpanded ? 3 : undefined}>
+          {item.summary}
+        </Text>
+        {isLongSummary ? (
+          <Pressable
+            style={styles.expandTextBtn}
+            onPress={toggleExpand}
+            hitSlop={8}>
+            <Text style={styles.expandTextLabel}>
+              {isExpanded ? 'عرض أقل' : 'عرض المزيد...'}
+            </Text>
+            <Ionicons
+              name={isExpanded ? 'chevron-up' : 'chevron-down'}
+              size={14}
+              color="#973c00"
+            />
+          </Pressable>
+        ) : null}
+      </View>
 
       {/* ٤. وسائط المنشور: إذا كان هناك فيديو يتم تشغيله مباشرة في الشاشة الرئيسية داخل الكارت بدون فتح صفحة */}
       {hasVideo ? (
@@ -220,31 +266,25 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
           />
         </View>
       ) : hasImage ? (
-        <Pressable
-          style={styles.mediaContainer}
-          onPress={() => onPress?.(item)}>
+        <View style={styles.mediaContainer}>
           <Image
             source={{ uri: directCoverUrl }}
             style={styles.image}
             contentFit="cover"
           />
-        </Pressable>
+        </View>
       ) : null}
 
-      {/* ٥. شريط التفاعل وتذييل البوست الحديث */}
+      {/* ٥. شريط التفاعل وتذييل البوست الحديث: مشاركة وعدد المشاهدات */}
       <View style={styles.footer}>
         <Pressable
           style={({ pressed }) => [
-            styles.moreButton,
+            styles.shareButton,
             pressed && { opacity: 0.8 },
           ]}
-          onPress={() => onPress?.(item)}>
-          <Text style={styles.moreButtonText}>عرض التفاصيل الكاملة</Text>
-          <Ionicons
-            name={I18nManager.isRTL ? 'arrow-back' : 'chevron-back'}
-            size={14}
-            color="#973c00"
-          />
+          onPress={handleShare}>
+          <Ionicons name="share-social-outline" size={15} color="#973c00" />
+          <Text style={styles.shareButtonText}>مشاركة الخبر</Text>
         </Pressable>
 
         <View style={styles.viewsWrap}>
@@ -270,10 +310,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 2,
-  },
-  cardHeaderPressable: {
-    width: '100%',
-    alignItems: 'stretch',
   },
   header: {
     flexDirection: rtlFlexDirection,
@@ -379,14 +415,27 @@ const styles = StyleSheet.create({
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
     lineHeight: 22.5,
-    marginBottom: 12,
+    marginBottom: 6,
     width: '100%',
     alignSelf: 'stretch',
+  },
+  expandTextBtn: {
+    flexDirection: rtlFlexDirection,
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    paddingVertical: 4,
+    marginBottom: 10,
+  },
+  expandTextLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#973c00',
+    textAlign: rtlTextAlign,
   },
   mediaContainer: {
     position: 'relative',
     width: '100%',
-    height: 195,
     borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: '#0F172A',
@@ -394,47 +443,7 @@ const styles = StyleSheet.create({
   },
   image: {
     width: '100%',
-    height: '100%',
-  },
-  videoPlayOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  playButtonCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#973c00',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  videoOnlyCard: {
-    width: '100%',
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#0F172A',
-    marginBottom: 12,
-  },
-  videoOnlyBox: {
-    height: 140,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#1E293B',
-  },
-  videoOnlyLabel: {
-    color: '#E2E8F0',
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
-    writingDirection: 'rtl',
+    height: 205,
   },
   footer: {
     flexDirection: rtlFlexDirection,
@@ -445,36 +454,30 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     width: '100%',
   },
+  shareButton: {
+    flexDirection: rtlFlexDirection,
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  shareButtonText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#973c00',
+  },
   viewsWrap: {
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    gap: 5,
   },
   viewsText: {
-    fontSize: 11.5,
-    color: '#64748B',
-    fontWeight: '700',
-    writingDirection: 'rtl',
-  },
-  moreButton: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#FFF7ED',
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-  },
-  moreButtonText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#973c00',
-    writingDirection: 'rtl',
+    color: '#64748B',
+    fontWeight: '600',
   },
 });
