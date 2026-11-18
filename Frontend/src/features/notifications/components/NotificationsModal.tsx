@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import LottieView from 'lottie-react-native';
-import React, { memo, useMemo } from 'react';
+import React, { memo } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -12,22 +12,11 @@ import {
   View,
 } from 'react-native';
 import { APP_THEME } from '@/core/theme/colors';
-import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
+import { rtlTextAlign } from '@/core/theme/rtl';
 import {
   NotificationSectionKey,
   VillageNotificationItem,
 } from '../types/notifications.types';
-
-const SECTION_CHIPS: ReadonlyArray<{
-  key: NotificationSectionKey;
-  labelAr: string;
-}> = [
-  { key: 'all', labelAr: 'الكل' },
-  { key: 'news', labelAr: 'الأخبار' },
-  { key: 'reports', labelAr: 'البلاغات' },
-  { key: 'craftsmen', labelAr: 'الصنايعية' },
-  { key: 'services', labelAr: 'الخدمات' },
-];
 
 const SECTION_META: Record<
   Exclude<NotificationSectionKey, 'all'>,
@@ -43,34 +32,20 @@ const SECTION_META: Record<
 interface NotificationsModalProps {
   visible: boolean;
   notifications: VillageNotificationItem[];
-  filteredNotifications: VillageNotificationItem[];
-  unreadCount: number;
-  readIds: string[];
-  activeSection: NotificationSectionKey;
   loading: boolean;
-  onChangeSection: (section: NotificationSectionKey) => void;
-  onRefresh: () => void;
   onSelectItem: (item: VillageNotificationItem) => void;
-  onMarkAllAsRead: () => void;
+  onClearAll: () => void;
   onClose: () => void;
 }
 
 export const NotificationsModal = memo(function NotificationsModal({
   visible,
   notifications,
-  filteredNotifications,
-  unreadCount,
-  readIds,
-  activeSection,
   loading,
-  onChangeSection,
-  onRefresh,
   onSelectItem,
-  onMarkAllAsRead,
+  onClearAll,
   onClose,
 }: NotificationsModalProps) {
-  const readSet = useMemo(() => new Set(readIds), [readIds]);
-
   return (
     <Modal
       visible={visible}
@@ -82,63 +57,16 @@ export const NotificationsModal = memo(function NotificationsModal({
         <Pressable
           style={[
             styles.bottomSheetBox,
-            filteredNotifications.length === 0 && styles.bottomSheetBoxEmpty,
+            notifications.length === 0 && styles.bottomSheetBoxEmpty,
           ]}
           onPress={(e) => e.stopPropagation()}>
           <View style={styles.sheetDragBar} />
-
-          <View style={styles.modalHeaderRow}>
-            <View style={styles.modalTitleGroup}>
-              <Text style={styles.modalTitle}>إشعارات القرية</Text>
-              {unreadCount > 0 ? (
-                <View style={styles.unreadHeaderPill}>
-                  <Text style={styles.unreadHeaderText}>{unreadCount} جديد</Text>
-                </View>
-              ) : null}
-            </View>
-
-            <View style={styles.headerActionsGroup}>
-              <Pressable
-                onPress={onRefresh}
-                style={styles.refreshChipBtn}
-                hitSlop={8}>
-                <Ionicons name="refresh" size={16} color={APP_THEME.primary} />
-              </Pressable>
-              <Pressable onPress={onClose} style={styles.closeBtn} hitSlop={8}>
-                <Ionicons name="close" size={18} color="#64748B" />
-              </Pressable>
-            </View>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipsScrollContent}
-            style={styles.chipsScroll}>
-            {SECTION_CHIPS.map((chip) => {
-              const active = activeSection === chip.key;
-              return (
-                <Pressable
-                  key={chip.key}
-                  style={[styles.sectionChip, active && styles.sectionChipActive]}
-                  onPress={() => onChangeSection(chip.key)}>
-                  <Text
-                    style={[
-                      styles.sectionChipText,
-                      active && styles.sectionChipTextActive,
-                    ]}>
-                    {chip.labelAr}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
 
           {loading && notifications.length === 0 ? (
             <View style={styles.loadingWrap}>
               <ActivityIndicator size="small" color={APP_THEME.primary} />
             </View>
-          ) : filteredNotifications.length === 0 ? (
+          ) : notifications.length === 0 ? (
             <View style={styles.emptyNotifBox}>
               <LottieView
                 source={require('../../../../assets/json/btXbjDx6qo.json')}
@@ -147,73 +75,73 @@ export const NotificationsModal = memo(function NotificationsModal({
                 style={styles.emptyNotifLottie}
               />
               <Text style={styles.emptyNotifTitle} numberOfLines={1}>
-                لا توجد إشعارات في هذا القسم حالياً
+                لا توجد إشعارات جديدة حالياً
               </Text>
-              <Text style={styles.emptyNotifSub} numberOfLines={2}>
-                ستصلك التنبيهات تلقائياً فور إضافة خبر أو بلاغ أو صنايعي أو خدمة
+              <Text style={styles.emptyNotifSub} numberOfLines={1}>
+                ستصلك التنبيهات فور نشر أخبار أو إضافات جديدة بالقرية
               </Text>
             </View>
           ) : (
-            <ScrollView
-              style={styles.notifScrollArea}
-              contentContainerStyle={styles.notifListWrap}
-              showsVerticalScrollIndicator={false}>
-              {filteredNotifications.map((n) => {
-                const isUnread = !readSet.has(n.id);
-                const meta = SECTION_META[n.section] || SECTION_META.general;
-                return (
-                  <Pressable
-                    key={n.id}
-                    style={[
-                      styles.notifItemCard,
-                      isUnread && styles.notifItemCardUnread,
-                    ]}
-                    onPress={() => onSelectItem(n)}>
-                    <View style={styles.notifItemTextCol}>
-                      <View style={styles.notifItemTopRow}>
-                        <View style={styles.timeUnreadGroup}>
+            <>
+              <ScrollView
+                style={styles.notifScrollArea}
+                contentContainerStyle={styles.notifListWrap}
+                showsVerticalScrollIndicator={false}>
+                {notifications.map((n) => {
+                  const meta = SECTION_META[n.section] || SECTION_META.general;
+                  return (
+                    <Pressable
+                      key={n.id}
+                      style={styles.notifItemCard}
+                      onPress={() => onSelectItem(n)}>
+                      <View style={styles.notifItemTextCol}>
+                        <View style={styles.notifItemTopRow}>
                           <Text style={styles.notifItemTime}>{n.time_ar}</Text>
-                          {isUnread ? <View style={styles.unreadDot} /> : null}
+                          <View
+                            style={[
+                              styles.sectionTag,
+                              { backgroundColor: meta.bg },
+                            ]}>
+                            <Text
+                              style={[
+                                styles.sectionTagText,
+                                { color: meta.color },
+                              ]}>
+                              {n.section_ar}
+                            </Text>
+                          </View>
                         </View>
-                        <View
-                          style={[
-                            styles.sectionTag,
-                            { backgroundColor: meta.bg },
-                          ]}>
-                          <Text
-                            style={[styles.sectionTagText, { color: meta.color }]}>
-                            {n.section_ar}
-                          </Text>
-                        </View>
+
+                        <Text style={styles.notifItemTitle} numberOfLines={2}>
+                          {n.title}
+                        </Text>
+
+                        <Text style={styles.notifItemBody} numberOfLines={2}>
+                          {n.body}
+                        </Text>
                       </View>
 
-                      <Text style={styles.notifItemTitle} numberOfLines={2}>
-                        {n.title}
-                      </Text>
+                      <View
+                        style={[
+                          styles.notifItemIconWrap,
+                          { backgroundColor: meta.bg },
+                        ]}>
+                        <Ionicons
+                          name={meta.icon}
+                          size={18}
+                          color={meta.color}
+                        />
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
 
-                      <Text style={styles.notifItemBody} numberOfLines={2}>
-                        {n.body}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={[
-                        styles.notifItemIconWrap,
-                        { backgroundColor: meta.bg },
-                      ]}>
-                      <Ionicons name={meta.icon} size={18} color={meta.color} />
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+              <Pressable style={styles.clearNotifsBtn} onPress={onClearAll}>
+                <Text style={styles.clearNotifsBtnText}>تحديد الكل كمقروء</Text>
+              </Pressable>
+            </>
           )}
-
-          {unreadCount > 0 ? (
-            <Pressable style={styles.clearNotifsBtn} onPress={onMarkAllAsRead}>
-              <Text style={styles.clearNotifsBtnText}>تحديد الكل كمقروء</Text>
-            </Pressable>
-          ) : null}
         </Pressable>
       </Pressable>
     </Modal>
@@ -247,7 +175,7 @@ export const IncomingNotificationBanner = memo(function IncomingNotificationBann
 
         <View style={styles.bannerTextCol}>
           <Text style={styles.bannerSectionLabel}>
-            إشعار جديد • {notification.section_ar}
+            {notification.section_ar}
           </Text>
           <Text style={styles.bannerTitle} numberOfLines={1}>
             {notification.title}
@@ -268,23 +196,24 @@ export const IncomingNotificationBanner = memo(function IncomingNotificationBann
 const styles = StyleSheet.create({
   sheetOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'flex-end',
   },
   bottomSheetBox: {
     width: '100%',
-    maxHeight: '78%',
+    maxHeight: '75%',
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderTopWidth: 1.5,
     borderColor: '#E2E8F0',
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: Platform.OS === 'android' ? 28 : 40,
   },
   bottomSheetBoxEmpty: {
-    paddingBottom: Platform.OS === 'android' ? 24 : 36,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'android' ? 30 : 40,
   },
   sheetDragBar: {
     width: 40,
@@ -292,88 +221,10 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: '#CBD5E1',
     alignSelf: 'center',
-    marginBottom: 12,
-  },
-  modalHeaderRow: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  modalTitleGroup: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    gap: 8,
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  unreadHeaderPill: {
-    backgroundColor: APP_THEME.primaryLight,
-    borderWidth: 1,
-    borderColor: APP_THEME.primaryBorder,
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 2,
-  },
-  unreadHeaderText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: APP_THEME.primary,
-  },
-  headerActionsGroup: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    gap: 8,
-  },
-  refreshChipBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: APP_THEME.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipsScroll: {
-    flexGrow: 0,
-    marginBottom: 12,
-  },
-  chipsScrollContent: {
-    flexDirection: rtlFlexDirection,
-    gap: 8,
-  },
-  sectionChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  sectionChipActive: {
-    backgroundColor: APP_THEME.primary,
-    borderColor: APP_THEME.primary,
-  },
-  sectionChipText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  sectionChipTextActive: {
-    color: '#FFFFFF',
+    marginBottom: 10,
   },
   loadingWrap: {
-    paddingVertical: 32,
+    paddingVertical: 28,
     alignItems: 'center',
   },
   emptyNotifLottie: {
@@ -382,8 +233,8 @@ const styles = StyleSheet.create({
   },
   emptyNotifBox: {
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 12,
+    gap: 3,
+    paddingVertical: 4,
   },
   emptyNotifTitle: {
     fontSize: 15,
@@ -392,17 +243,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   emptyNotifSub: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '500',
     color: '#64748B',
     textAlign: 'center',
   },
   notifScrollArea: {
-    maxHeight: 380,
+    maxHeight: 400,
   },
   notifListWrap: {
+    width: '100%',
     gap: 8,
-    paddingBottom: 6,
+    paddingTop: 2,
+    paddingBottom: 4,
   },
   notifItemCard: {
     width: '100%',
@@ -416,14 +269,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  notifItemCardUnread: {
-    backgroundColor: '#FFFBF7',
-    borderColor: APP_THEME.primaryBorder,
-  },
   notifItemIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
@@ -442,17 +291,6 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 8,
   },
-  timeUnreadGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  unreadDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: APP_THEME.primary,
-  },
   sectionTag: {
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -465,7 +303,7 @@ const styles = StyleSheet.create({
   notifItemTitle: {
     width: '100%',
     fontSize: 13.5,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#0F172A',
     textAlign: 'right',
   },
@@ -473,6 +311,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     fontWeight: '600',
+    textAlign: 'left',
   },
   notifItemBody: {
     width: '100%',
@@ -485,10 +324,10 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingVertical: 8,
     paddingHorizontal: 14,
-    marginTop: 6,
+    marginTop: 4,
   },
   clearNotifsBtnText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
     color: APP_THEME.primary,
   },

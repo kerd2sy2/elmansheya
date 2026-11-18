@@ -9,32 +9,39 @@ import {
   registerPushTokenWithBackend,
   subscribeNotificationsRefresh,
 } from '../api/notifications.api';
-import {
-  NotificationSectionKey,
-  VillageNotificationItem,
-} from '../types/notifications.types';
+import { VillageNotificationItem } from '../types/notifications.types';
 
-const READ_NOTIFS_STORAGE_KEY = 'elmansheya_read_notifs_v1';
+const NOTIF_STATE_STORAGE_KEY = 'elmansheya_notif_state_v2';
 const POLL_INTERVAL_MS = 15_000;
 
+interface StoredNotifState {
+  lastClearedTimestamp: number;
+  dismissedIds: string[];
+}
+
+const DEFAULT_STORED_STATE: StoredNotifState = {
+  lastClearedTimestamp: 0,
+  dismissedIds: [],
+};
+
 export function useNotificationsFeed(userPhone?: string) {
-  const [notifications, setNotifications] = useState<VillageNotificationItem[]>([]);
-  const [readIds, setReadIds] = useState<string[]>([]);
-  const [activeSection, setActiveSection] = useState<NotificationSectionKey>('all');
+  const [allNotifications, setAllNotifications] = useState<VillageNotificationItem[]>([]);
+  const [notifState, setNotifState] = useState<StoredNotifState>(DEFAULT_STORED_STATE);
+  const [stateLoaded, setStateLoaded] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [latestBannerNotification, setLatestBannerNotification] =
     useState<VillageNotificationItem | null>(null);
 
   const initialLoadedRef = useRef<boolean>(false);
   const highestSeenTimestampRef = useRef<number>(0);
-  const readIdsRef = useRef<string[]>([]);
+  const stateRef = useRef<StoredNotifState>(DEFAULT_STORED_STATE);
+  const allNotifsRef = useRef<VillageNotificationItem[]>([]);
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const persistReadIds = useCallback(async (nextIds: string[]) => {
-    const trimmed = nextIds.slice(-150);
-    readIdsRef.current = trimmed;
-    setReadIds(trimmed);
-    await setSecureItem(READ_NOTIFS_STORAGE_KEY, trimmed);
+  const persistNotifState = useCallback(async (nextState: StoredNotifState) => {
+    stateRef.current = nextState;
+    setNotifState(nextState);
+    await setSecureItem(NOTIF_STATE_STORAGE_KEY, nextState);
   }, []);
 
   const dismissBanner = useCallback(() => {
@@ -63,9 +70,10 @@ export function useNotificationsFeed(userPhone?: string) {
   const refresh = useCallback(async () => {
     const items = await fetchNotificationsFeed();
     setLoading(false);
+    allNotifsRef.current = items;
+    setAllNotifications(items);
     if (!items.length) return;
 
-    setNotifications(items);
     const maxTs = items.reduce(
       (acc, cur) => Math.max(acc, Number(cur.timestamp || 0)),
       0
@@ -73,16 +81,21 @@ export function useNotificationsFeed(userPhone?: string) {
 
     if (!initialLoadedRef.current) {
       initialLoadedRef.current = true;
-      highestSeenTimestampRef.current = maxTs;
+      highestSeenTimestampRef.current = Math.max(
+        maxTs,
+        stateRef.current.lastClearedTimestamp
+      );
       return;
     }
 
     if (maxTs > highestSeenTimestampRef.current) {
-      const readSet = new Set(readIdsRef.current);
+      const { lastClearedTimestamp, dismissedIds } = stateRef.current;
+      const dismissedSet = new Set(dismissedIds);
       const newest = items.find(
         (it) =>
           Number(it.timestamp || 0) > highestSeenTimestampRef.current &&
-          !readSet.has(it.id)
+          Number(it.timestamp || 0) > lastClearedTimestamp &&
+          !dismissedSet.has(it.id)
       );
       highestSeenTimestampRef.current = maxTs;
       if (newest) {
@@ -93,12 +106,22 @@ export function useNotificationsFeed(userPhone?: string) {
 
   useEffect(() => {
     let active = true;
-    getSecureItem<string[]>(READ_NOTIFS_STORAGE_KEY).then((saved) => {
-      if (!active || !Array.isArray(saved)) return;
-      readIdsRef.current = saved;
-      setReadIds(saved);
-    });
-    refresh();
+    (async () => {
+      const saved = await getSecureItem<StoredNotifState>(NOTIF_STATE_STORAGE_KEY);
+      if (!active) return;
+      if (saved && typeof saved === 'object') {
+        const cleanSaved: StoredNotifState = {
+          lastClearedTimestamp: Number(saved.lastClearedTimestamp || 0),
+          dismissedIds: Array.isArray(saved.dismissedIds)
+            ? saved.dismissedIds.slice(-30)
+            : [],
+        };
+        stateRef.current = cleanSaved;
+        setNotifState(cleanSaved);
+      }
+      setStateLoaded(true);
+      await refresh();
+    })();
 
     const unsubscribe = subscribeNotificationsRefresh(() => {
       refresh();
@@ -138,7 +161,7 @@ export function useNotificationsFeed(userPhone?: string) {
         const fp = await getCompositeDeviceFingerprint().catch(() => '');
         await registerPushTokenWithBackend(token, userPhone, fp);
       } catch {
-        // تجاهل إذا كانت بيئة Expo Go لا تدعم الإشعارات البعيدة الأصلية
+        // تجاهل في Expo Go
       }
     })();
     return () => {
@@ -146,44 +169,60 @@ export function useNotificationsFeed(userPhone?: string) {
     };
   }, [userPhone]);
 
-  const readSet = useMemo(() => new Set(readIds), [readIds]);
-
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !readSet.has(n.id)).length,
-    [notifications, readSet]
-  );
-
-  const filteredNotifications = useMemo(() => {
-    if (activeSection === 'all') return notifications;
-    return notifications.filter((n) => n.section === activeSection);
-  }, [activeSection, notifications]);
-
-  const markAsRead = useCallback(
-    async (id: string) => {
-      if (readIdsRef.current.includes(id)) return;
-      await persistReadIds([...readIdsRef.current, id]);
-    },
-    [persistReadIds]
-  );
-
-  const markAllAsRead = useCallback(async () => {
-    const allIds = Array.from(
-      new Set([...readIdsRef.current, ...notifications.map((n) => n.id)])
+  const notifications = useMemo(() => {
+    if (!stateLoaded) return [];
+    const { lastClearedTimestamp, dismissedIds } = notifState;
+    const dismissedSet = new Set(dismissedIds);
+    return allNotifications.filter(
+      (item) =>
+        Number(item.timestamp || 0) > lastClearedTimestamp &&
+        !dismissedSet.has(item.id)
     );
-    await persistReadIds(allIds);
-  }, [notifications, persistReadIds]);
+  }, [allNotifications, notifState, stateLoaded]);
+
+  const dismissNotification = useCallback(
+    async (id: string) => {
+      const { lastClearedTimestamp, dismissedIds } = stateRef.current;
+      if (dismissedIds.includes(id)) return;
+      const validIds = new Set(
+        allNotifsRef.current
+          .filter((it) => Number(it.timestamp || 0) > lastClearedTimestamp)
+          .map((it) => it.id)
+      );
+      const nextDismissed = [...dismissedIds, id]
+        .filter((itemId) => itemId === id || validIds.has(itemId))
+        .slice(-30);
+      await persistNotifState({
+        lastClearedTimestamp,
+        dismissedIds: nextDismissed,
+      });
+    },
+    [persistNotifState]
+  );
+
+  const clearAllNotifications = useCallback(async () => {
+    const maxItemTs = allNotifsRef.current.reduce(
+      (acc, cur) => Math.max(acc, Number(cur.timestamp || 0)),
+      0
+    );
+    const nextClearedTs = Math.max(
+      stateRef.current.lastClearedTimestamp,
+      maxItemTs,
+      Math.floor(Date.now() / 1000)
+    );
+    await persistNotifState({
+      lastClearedTimestamp: nextClearedTs,
+      dismissedIds: [],
+    });
+  }, [persistNotifState]);
 
   return {
     notifications,
-    filteredNotifications,
-    unreadCount,
-    readIds,
-    activeSection,
-    setActiveSection,
+    unreadCount: notifications.length,
     loading,
     refresh,
-    markAsRead,
-    markAllAsRead,
+    dismissNotification,
+    clearAllNotifications,
     latestBannerNotification,
     dismissBanner,
   };

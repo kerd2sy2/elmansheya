@@ -105,15 +105,16 @@ def format_relative_time_ar(ts):
         return 'منذ يومين'
     return f'منذ {days} يوم'
 
-def _parse_iso_ts(val, fallback_ts):
-    if not val:
-        return fallback_ts
-    try:
-        s = str(val).replace('Z', '+00:00')
-        from datetime import datetime
-        return int(datetime.fromisoformat(s).timestamp())
-    except Exception:
-        return fallback_ts
+def _prune_notifications(items):
+    if not isinstance(items, list):
+        return []
+    now_ts = int(time.time())
+    cutoff = now_ts - 172800  # حذف الإشعارات الأقدم من 48 ساعة تلقائياً
+    fresh = [
+        item for item in items
+        if isinstance(item, dict) and int(item.get('timestamp', 0)) >= cutoff
+    ]
+    return fresh[:25]
 
 def _build_seed_notifications():
     now_ts = int(time.time())
@@ -129,12 +130,12 @@ def _build_seed_notifications():
             seeds.append({
                 'id': f"seed-news-{n.get('id', idx)}",
                 'section': 'news',
-                'section_ar': 'الأخبار',
-                'title': f'خبر: {title}',
+                'section_ar': 'قسم الأخبار',
+                'title': title,
                 'body': (n.get('summary') or title).strip()[:140],
                 'target_id': str(n.get('id') or ''),
                 'created_at': n.get('published_at') or time.strftime('%Y-%m-%dT%H:%M:%S+03:00'),
-                'timestamp': _parse_iso_ts(n.get('published_at'), now_ts - (idx * 600 + 300)),
+                'timestamp': now_ts - (idx * 600 + 300),
             })
 
     reports_data = load_json(REPORTS_FILE)
@@ -148,12 +149,12 @@ def _build_seed_notifications():
             seeds.append({
                 'id': f"seed-report-{rep.get('id', idx)}",
                 'section': 'reports',
-                'section_ar': 'البلاغات',
-                'title': f'بلاغ في القرية: {title}',
+                'section_ar': 'قسم البلاغات',
+                'title': title,
                 'body': f'{kind} - {addr}',
                 'target_id': str(rep.get('id') or ''),
                 'created_at': rep.get('created_at') or time.strftime('%Y-%m-%dT%H:%M:%S+03:00'),
-                'timestamp': _parse_iso_ts(rep.get('created_at'), now_ts - ((idx + 3) * 900)),
+                'timestamp': now_ts - ((idx + 3) * 900),
             })
 
     craftsmen_data = load_json(CRAFTSMEN_FILE)
@@ -167,25 +168,29 @@ def _build_seed_notifications():
             seeds.append({
                 'id': f"seed-craft-{cr.get('id', idx)}",
                 'section': 'craftsmen',
-                'section_ar': 'الصنايعية',
-                'title': f'صنايعي في الدليل: {name}',
-                'body': f'التخصص: {spec} - {area}',
+                'section_ar': 'قسم الصنايعية',
+                'title': f'انضمام {name} ({spec})',
+                'body': f'المنطقة: {area}',
                 'target_id': str(cr.get('id') or ''),
                 'created_at': time.strftime('%Y-%m-%dT%H:%M:%S+03:00'),
                 'timestamp': now_ts - ((idx + 5) * 1200),
             })
 
     seeds.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
-    return seeds[:100]
+    return _prune_notifications(seeds)
 
 def load_notifications():
     with NOTIF_LOCK:
-        items = load_json(NOTIFICATIONS_FILE)
-        if not isinstance(items, list) or len(items) == 0:
+        if not os.path.exists(NOTIFICATIONS_FILE):
             items = _build_seed_notifications()
             if items:
                 save_json(NOTIFICATIONS_FILE, items)
-        return list(items)
+            return list(items)
+        raw_items = load_json(NOTIFICATIONS_FILE)
+        pruned = _prune_notifications(raw_items)
+        if isinstance(raw_items, list) and len(pruned) != len(raw_items):
+            save_json(NOTIFICATIONS_FILE, pruned)
+        return list(pruned)
 
 def dispatch_push_to_tokens(title, body, data):
     try:
@@ -238,9 +243,9 @@ def create_system_notification(section, section_ar, title, body, target_id=''):
     with NOTIF_LOCK:
         items = load_json(NOTIFICATIONS_FILE)
         if not isinstance(items, list):
-            items = _build_seed_notifications()
+            items = [] if os.path.exists(NOTIFICATIONS_FILE) else _build_seed_notifications()
         items.insert(0, notif)
-        items = items[:100]
+        items = _prune_notifications(items)
         save_json(NOTIFICATIONS_FILE, items)
 
     threading.Thread(
@@ -259,21 +264,21 @@ def emit_section_notification_on_write(path, req_json, resp_json):
     if '/news/publish' in path:
         title = (req_json.get('title') or resp_data.get('title') or 'خبر جديد بالقرية').strip()
         summary = (req_json.get('summary') or req_json.get('content') or resp_data.get('summary') or title).strip()
-        create_system_notification('news', 'الأخبار', f'خبر جديد: {title}', summary[:160], item_id)
+        create_system_notification('news', 'قسم الأخبار', title, summary[:160], item_id)
     elif '/reports/create' in path:
         title = (req_json.get('title') or resp_data.get('title') or 'بلاغ جديد').strip()
         kind = (req_json.get('report_type_ar') or req_json.get('category_ar') or resp_data.get('report_type_ar') or 'بلاغ').strip()
         addr = (req_json.get('manual_address') or resp_data.get('manual_address') or 'المنشية').strip()
-        create_system_notification('reports', 'البلاغات', f'بلاغ جديد: {title}', f'{kind} - {addr}', item_id)
+        create_system_notification('reports', 'قسم البلاغات', title, f'{kind} - {addr}', item_id)
     elif '/craftsmen/create' in path or '/craftsmen/register' in path:
         name = (req_json.get('full_name') or resp_data.get('full_name') or 'حرفي جديد').strip()
         spec = (req_json.get('specialty') or req_json.get('profession_ar') or resp_data.get('specialty') or 'حرفي').strip()
         area = (req_json.get('area') or resp_data.get('area') or 'المنشية').strip()
-        create_system_notification('craftsmen', 'الصنايعية', f'انضمام صنايعي جديد: {name}', f'التخصص: {spec} - {area}', item_id)
+        create_system_notification('craftsmen', 'قسم الصنايعية', f'انضمام {name} ({spec})', f'المنطقة: {area}', item_id)
     elif '/services/create-item' in path:
         name = (req_json.get('title') or req_json.get('name') or resp_data.get('title') or 'خدمة جديدة').strip()
         addr = (req_json.get('address') or resp_data.get('address') or req_json.get('description') or 'تمت إضافة خدمة جديدة في دليل الخدمات.').strip()
-        create_system_notification('services', 'الخدمات', f'خدمة جديدة: {name}', addr[:160], item_id)
+        create_system_notification('services', 'قسم الخدمات', name, addr[:160], item_id)
 
 class GatewayHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"

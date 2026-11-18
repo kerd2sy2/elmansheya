@@ -52,15 +52,11 @@ export function NewsHomeScreen() {
     useNewsFeed();
   const {
     notifications,
-    filteredNotifications,
     unreadCount,
-    readIds,
-    activeSection,
-    setActiveSection,
     loading: notifsLoading,
     refresh: refreshNotifications,
-    markAsRead,
-    markAllAsRead,
+    dismissNotification,
+    clearAllNotifications,
     latestBannerNotification,
     dismissBanner,
   } = useNotificationsFeed(user?.phone);
@@ -72,7 +68,7 @@ export function NewsHomeScreen() {
     useState<boolean>(false);
 
   const handleNotificationSelect = (item: VillageNotificationItem) => {
-    markAsRead(item.id);
+    dismissNotification(item.id);
     dismissBanner();
     setShowNotificationsModal(false);
     if (item.section === 'reports') {
@@ -545,15 +541,9 @@ export function NewsHomeScreen() {
       <NotificationsModal
         visible={showNotificationsModal}
         notifications={notifications}
-        filteredNotifications={filteredNotifications}
-        unreadCount={unreadCount}
-        readIds={readIds}
-        activeSection={activeSection}
         loading={notifsLoading}
-        onChangeSection={setActiveSection}
-        onRefresh={refreshNotifications}
         onSelectItem={handleNotificationSelect}
-        onMarkAllAsRead={markAllAsRead}
+        onClearAll={clearAllNotifications}
         onClose={() => setShowNotificationsModal(false)}
       />
 
