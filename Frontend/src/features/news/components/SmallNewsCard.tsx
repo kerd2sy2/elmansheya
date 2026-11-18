@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   I18nManager,
   LayoutAnimation,
@@ -148,6 +148,26 @@ export function parseAuthorInfo(
   };
 }
 
+function getTwoLinePreview(text: string, maxChars = 85): string {
+  if (!text) return '';
+  const lines = text.split('\n');
+  if (lines.length > 2) {
+    const twoLines = `${lines[0]}\n${lines[1]}`;
+    if (twoLines.length > maxChars) {
+      const cut = twoLines.slice(0, maxChars);
+      const lastSpace = cut.lastIndexOf(' ');
+      return (lastSpace > 50 ? cut.slice(0, lastSpace) : cut).trim();
+    }
+    return twoLines.trim();
+  }
+  if (text.length > maxChars) {
+    const cut = text.slice(0, maxChars);
+    const lastSpace = cut.lastIndexOf(' ');
+    return (lastSpace > 50 ? cut.slice(0, lastSpace) : cut).trim();
+  }
+  return text.trim();
+}
+
 export const SmallNewsCard = React.memo(function SmallNewsCard({
   item,
   isActive = false,
@@ -165,7 +185,11 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
   const hasVideo = Boolean(directVideoUrl);
 
   const isLongSummary =
-    (item.summary?.length ?? 0) > 80 || (item.summary || '').includes('\n');
+    (item.summary?.length ?? 0) > 85 || (item.summary || '').includes('\n');
+  const twoLinePreview = useMemo(
+    () => (isLongSummary ? getTwoLinePreview(item.summary, 85) : item.summary),
+    [item.summary, isLongSummary]
+  );
 
   const { cleanName, roleTitle } = parseAuthorInfo(
     item.author_display_name,
@@ -221,28 +245,19 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
         <Text style={styles.title}>{item.title}</Text>
       </View>
 
-      {/* ٣. نص / براجراف المنشور - يتوسع في نفس الصفحة عند وجود نص طويل */}
+      {/* ٣. نص / براجراف المنشور - كلمة المزيد ملتصقة بنهاية الكلام في السطرين كإنستجرام وتويتر */}
       <View style={styles.textWrap}>
-        <Text
-          style={styles.summary}
-          numberOfLines={isLongSummary && !isExpanded ? 2 : undefined}>
-          {item.summary}
-        </Text>
-        {isLongSummary ? (
-          <Pressable
-            style={styles.expandTextBtn}
-            onPress={toggleExpand}
-            hitSlop={8}>
-            <Text style={styles.expandTextLabel}>
-              {isExpanded ? 'أقل' : 'المزيد'}
+        <Text style={styles.summary}>
+          {isExpanded || !isLongSummary ? item.summary : twoLinePreview}
+          {isLongSummary ? (
+            <Text
+              style={styles.inlineExpandText}
+              onPress={toggleExpand}
+              suppressHighlighting={false}>
+              {isExpanded ? ' أقل' : ' ...المزيد'}
             </Text>
-            <Ionicons
-              name={isExpanded ? 'chevron-up' : 'chevron-down'}
-              size={13}
-              color="#973c00"
-            />
-          </Pressable>
-        ) : null}
+          ) : null}
+        </Text>
       </View>
 
       {/* ٤. وسائط المنشور: تُعرض بأبعادها ونسبتها الطبيعية الكاملة دون أي اقتصاص للأطراف */}
@@ -416,23 +431,14 @@ const styles = StyleSheet.create({
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
     lineHeight: 22.5,
-    marginBottom: 6,
+    marginBottom: 8,
     width: '100%',
     alignSelf: 'stretch',
   },
-  expandTextBtn: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 4,
-    paddingVertical: 4,
-    marginBottom: 10,
-  },
-  expandTextLabel: {
-    fontSize: 13,
-    fontWeight: '700',
+  inlineExpandText: {
     color: '#973c00',
-    textAlign: rtlTextAlign,
+    fontWeight: '800',
+    fontSize: 13.5,
   },
   mediaContainer: {
     position: 'relative',
