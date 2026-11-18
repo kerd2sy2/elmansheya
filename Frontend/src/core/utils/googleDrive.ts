@@ -7,7 +7,10 @@ export function extractGoogleDriveFileId(url: string | null | undefined): string
   if (!url || typeof url !== 'string') return null;
   const trimmed = url.trim();
 
-  // فحص روابط مشاركة درايف بمختلف الصيغ
+  // فحص روابط Google CDN وروابط مشاركة درايف بمختلف الصيغ
+  const cdnMatch = trimmed.match(/googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/);
+  if (cdnMatch) return cdnMatch[1];
+
   const fileMatch = trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
   if (fileMatch) return fileMatch[1];
 
@@ -22,7 +25,16 @@ export function extractGoogleDriveFileId(url: string | null | undefined): string
 
 export function isGoogleDriveUrl(url: string | null | undefined): boolean {
   if (!url) return false;
-  return url.includes('drive.google.com') || url.includes('docs.google.com');
+  return (
+    url.includes('drive.google.com') ||
+    url.includes('docs.google.com') ||
+    url.includes('googleusercontent.com/d/')
+  );
+}
+
+function isLegacyOrStaleLocalUrl(rawUrl: string): boolean {
+  const trimmed = rawUrl.trim();
+  return trimmed.includes('/uploads/') || trimmed.startsWith('file:///data/user/');
 }
 
 /**
@@ -30,7 +42,7 @@ export function isGoogleDriveUrl(url: string | null | undefined): boolean {
  * لا يحتاج تحميل على السيرفر ويدعم الكاش والـ WebP تلقائياً
  */
 export function getDirectImageUrl(rawUrl: string | null | undefined): string {
-  if (!rawUrl) return '';
+  if (!rawUrl || isLegacyOrStaleLocalUrl(rawUrl)) return '';
   const fileId = extractGoogleDriveFileId(rawUrl);
   if (fileId) {
     // رابط Google User Content المباشر والسريع للصور بدقة مناسبة للهواتف
@@ -44,7 +56,7 @@ export function getDirectImageUrl(rawUrl: string | null | undefined): string {
  * يعمل مع مشغلات الفيديو دون الحاجة لحفظ المقطع على خادم التطبيق
  */
 export function getDirectVideoUrl(rawUrl: string | null | undefined): string {
-  if (!rawUrl) return '';
+  if (!rawUrl || isLegacyOrStaleLocalUrl(rawUrl)) return '';
   const fileId = extractGoogleDriveFileId(rawUrl);
   if (fileId) {
     return `https://drive.google.com/uc?export=download&id=${fileId}`;

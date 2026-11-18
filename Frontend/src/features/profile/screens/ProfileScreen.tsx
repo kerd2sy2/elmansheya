@@ -32,6 +32,7 @@ import { changeUserPassword } from '@/features/auth/api/auth.api';
 import * as Haptics from 'expo-haptics';
 import { API_BASE_URL } from '@/core/config/api.config';
 import { uploadMediaToDrive } from '@/core/storage/driveUpload';
+import { getDirectImageUrl } from '@/core/utils/googleDrive';
 import { VerificationModal } from '../components/VerificationModal';
 import { ReportTrackingModal } from '@/features/reports/components/ReportTrackingModal';
 import {
@@ -647,8 +648,8 @@ export function ProfileScreen() {
             <Pressable
               onPress={() => setShowFullImageModal(true)}
               style={styles.avatarCircle}>
-              {user.avatar_url ? (
-                <Image source={{ uri: user.avatar_url }} style={styles.avatarImg} />
+              {getDirectImageUrl(user.avatar_url) ? (
+                <Image source={{ uri: getDirectImageUrl(user.avatar_url) }} style={styles.avatarImg} />
               ) : (
                 <View style={styles.initialsBox}>
                   <Text style={styles.initialsText}>{initials}</Text>
@@ -846,9 +847,9 @@ export function ProfileScreen() {
           <Pressable
             style={styles.fullScreenImageBody}
             onPress={() => setShowFullImageModal(false)}>
-            {user.avatar_url ? (
+            {getDirectImageUrl(user.avatar_url) ? (
               <Image
-                source={{ uri: user.avatar_url }}
+                source={{ uri: getDirectImageUrl(user.avatar_url) }}
                 style={styles.fullScreenAvatarImg}
                 resizeMode="contain"
               />

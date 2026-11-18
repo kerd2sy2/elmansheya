@@ -92,6 +92,7 @@ interface ReportsOverviewResponse {
     title: string;
     description: string;
     manual_address: string;
+    image_url?: string;
     status: PublicReportItem['status'];
     status_ar: string;
     resolution_summary?: string;
@@ -118,13 +119,44 @@ export function ReportsScreen() {
       const res = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
-        quality: 0.6,
+        quality: 0.7,
+        base64: true,
       });
-      if (!res.canceled && res.assets[0]?.uri) {
-        setReportImage(res.assets[0].uri);
+      const asset = !res.canceled ? res.assets[0] : null;
+      if (!asset?.uri) return;
+
+      let uploadRes: Response;
+      if (asset.base64) {
+        uploadRes = await fetch(`${API_BASE_URL}/storage/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            base64: asset.base64,
+            filename: asset.fileName || `report_${Date.now()}.jpg`,
+            section: 'reports',
+            media_type: 'image',
+          }),
+        });
+      } else {
+        const formData = new FormData();
+        formData.append('file', {
+          uri: asset.uri,
+          name: asset.fileName || `report_${Date.now()}.jpg`,
+          type: 'image/jpeg',
+        } as any);
+        uploadRes = await fetch(
+          `${API_BASE_URL}/storage/upload?section=reports&media_type=image`,
+          { method: 'POST', body: formData }
+        );
+      }
+      const uploadJson = await uploadRes.json().catch(() => null);
+      if (uploadRes.ok && uploadJson?.success && uploadJson?.data?.url) {
+        setReportImage(uploadJson.data.url);
+      } else {
+        Alert.alert('تعذر رفع الصورة', uploadJson?.error?.message || 'يرجى المحاولة مرة أخرى');
       }
     } catch {
-      Alert.alert('خطأ', 'تعذر اختيار الصورة من المعرض');
+      Alert.alert('خطأ', 'تعذر رفع الصورة إلى Google Drive');
     }
   };
 
@@ -144,6 +176,7 @@ export function ReportsScreen() {
       title: r.title,
       description: r.description,
       manual_address: r.manual_address,
+      image_url: r.image_url,
       status: r.status,
       status_ar: r.status_ar,
       resolution_summary: r.resolution_summary,

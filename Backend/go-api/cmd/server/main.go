@@ -50,7 +50,6 @@ func main() {
 
 	rootMux := http.NewServeMux()
 	modRegistry.MountAll(rootMux)
-	rootMux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("data"))))
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.HTTPPort,

@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
+import { getDirectImageUrl } from '@/core/utils/googleDrive';
 import { PublicReportItem } from '../types/reports.types';
 
 interface PublicReportCardProps {
@@ -46,7 +47,8 @@ export function PublicReportCard({ item, onPress }: PublicReportCardProps) {
   const isInProgress = item.status === 'in_progress';
   const category = getCategoryMeta(item.report_type_ar);
 
-  const displayImageUrl = item.image_url?.trim() && !imageError ? item.image_url.trim() : null;
+  const resolvedUrl = getDirectImageUrl(item.image_url);
+  const displayImageUrl = resolvedUrl && !imageError ? resolvedUrl : null;
 
   return (
     <Pressable
