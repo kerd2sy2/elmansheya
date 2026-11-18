@@ -6,7 +6,7 @@ import time
 import urllib.request
 import urllib.error
 import urllib.parse
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import sys
 import secrets
 import hashlib
@@ -114,10 +114,31 @@ def _prune_notifications(items):
         return []
     now_ts = int(time.time())
     cutoff = now_ts - 172800  # حذف الإشعارات الأقدم من 48 ساعة تلقائياً
-    fresh = [
-        item for item in items
-        if isinstance(item, dict) and int(item.get('timestamp', 0)) >= cutoff
-    ]
+
+    # قراءة حالة البلاغات لاستبعاد أي إشعار لبلاغ لم يتم اعتماده من المشرف
+    reports_map = {}
+    try:
+        rep_list = load_json(REPORTS_FILE)
+        if isinstance(rep_list, list):
+            for r in rep_list:
+                if isinstance(r, dict) and r.get('id'):
+                    reports_map[str(r['id'])] = r.get('status', '')
+    except Exception:
+        pass
+
+    fresh = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        if int(item.get('timestamp', 0)) < cutoff:
+            continue
+        # منع أي إشعار لبلاغ قيد المراجعة أو مرفوض
+        if item.get('section') == 'reports':
+            target_id = str(item.get('target_id') or '')
+            if target_id and reports_map.get(target_id) in ('pending_approval', 'rejected', 'declined'):
+                continue
+        fresh.append(item)
+
     return fresh[:25]
 
 def _build_seed_notifications():
@@ -144,7 +165,12 @@ def _build_seed_notifications():
 
     reports_data = load_json(REPORTS_FILE)
     if isinstance(reports_data, list):
-        for idx, rep in enumerate(reversed(reports_data[-2:])):
+        # تصفية البلاغات المعتمدة فقط (استبعاد قيد المراجعة والمرفوضة تماماً)
+        approved_reports = [
+            rep for rep in reports_data
+            if isinstance(rep, dict) and rep.get('status') not in ('pending_approval', 'rejected', 'declined')
+        ]
+        for idx, rep in enumerate(reversed(approved_reports[-2:])):
             title = (rep.get('title') or '').strip()
             if not title:
                 continue
@@ -381,11 +407,14 @@ def emit_section_notification_on_write(path, req_json, resp_json):
         title = (req_json.get('title') or resp_data.get('title') or 'خبر جديد بالقرية').strip()
         summary = (req_json.get('summary') or req_json.get('content') or resp_data.get('summary') or title).strip()
         create_system_notification('news', 'قسم الأخبار', title, summary[:160], item_id)
-    elif '/reports/create' in path:
-        title = (req_json.get('title') or resp_data.get('title') or 'بلاغ جديد').strip()
-        kind = (req_json.get('report_type_ar') or req_json.get('category_ar') or resp_data.get('report_type_ar') or 'بلاغ').strip()
-        addr = (req_json.get('manual_address') or resp_data.get('manual_address') or 'المنشية').strip()
-        create_system_notification('reports', 'قسم البلاغات', title, f'{kind} - {addr}', item_id)
+    elif '/reports/approve' in path or '/reports/update-status' in path or '/reports/status' in path:
+        new_status = (req_json.get('status') or resp_data.get('status') or '').strip()
+        if new_status in ('approved', 'in_progress', 'resolved'):
+            title = (resp_data.get('title') or req_json.get('title') or 'بلاغ معتمد').strip()
+            kind = (resp_data.get('report_type_ar') or req_json.get('report_type_ar') or 'بلاغ').strip()
+            addr = (resp_data.get('manual_address') or req_json.get('manual_address') or 'المنشية').strip()
+            create_system_notification('reports', 'قسم البلاغات', f'موافقة على بلاغ: {title}', f'{kind} - {addr}', item_id)
+    # ملاحظة: تم استبعاد /reports/create نهائياً لحماية خصوصية المواطنين وعدم إرسال إشعار عام إلا بعد موافقة المشرف
     elif '/craftsmen/create' in path or '/craftsmen/register' in path:
         name = (req_json.get('full_name') or resp_data.get('full_name') or 'حرفي جديد').strip()
         spec = (req_json.get('specialty') or req_json.get('profession_ar') or resp_data.get('specialty') or 'حرفي').strip()
@@ -398,6 +427,11 @@ def emit_section_notification_on_write(path, req_json, resp_json):
 
 class GatewayHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+
+    def end_headers(self):
+        self.send_header('Connection', 'close')
+        self.close_connection = True
+        super().end_headers()
 
     def handle_expect_100(self):
         self.wfile.write(b"HTTP/1.1 100 Continue\r\n\r\n")
@@ -1369,8 +1403,12 @@ class GatewayHandler(BaseHTTPRequestHandler):
             err_body = json.dumps({'success': False, 'error': {'code': 'GATEWAY_ERROR', 'message': str(e)}}).encode('utf-8')
             return err_body, 502, {'Content-Type': 'application/json'}
 
+class ThreadedGatewayServer(ThreadingHTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
 if __name__ == '__main__':
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
-    server = HTTPServer(('0.0.0.0', port), GatewayHandler)
-    print(f'[Gateway] Running on port {port} -> Upstream: {UPSTREAM_URL}')
+    server = ThreadedGatewayServer(('0.0.0.0', port), GatewayHandler)
+    print(f'[Gateway:Threaded] Running on port {port} -> Upstream: {UPSTREAM_URL}')
     server.serve_forever()

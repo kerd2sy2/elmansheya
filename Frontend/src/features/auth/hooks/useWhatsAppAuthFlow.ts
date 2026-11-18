@@ -76,6 +76,7 @@ export function useWhatsAppAuthFlow() {
   const phoneInputRef = useRef<any>(null);
   const otpInputRef = useRef<any>(null);
   const nameInputRef = useRef<any>(null);
+  const cachedFingerprintRef = useRef<string>('');
 
   const selectedCountry: CountryDialOption =
     COUNTRY_BY_CODE[selectedCountryCode] || DEFAULT_COUNTRY;
@@ -101,6 +102,9 @@ export function useWhatsAppAuthFlow() {
 
   useEffect(() => {
     let active = true;
+    getCompositeDeviceFingerprint().then((fp) => {
+      if (active) cachedFingerprintRef.current = fp;
+    }).catch(() => {});
     getSecureItem<{ seen: boolean }>(ONBOARDING_SEEN_KEY).then((data) => {
       if (active) setHasSeenOnboarding(Boolean(data?.seen));
     });
@@ -339,7 +343,7 @@ export function useWhatsAppAuthFlow() {
 
     setSubmitting(true);
     try {
-      const fp = await getCompositeDeviceFingerprint();
+      const fp = cachedFingerprintRef.current || (await getCompositeDeviceFingerprint());
       const res = await sendWhatsAppOtp(fullPhone, fp);
 
       if (!res.ok) {

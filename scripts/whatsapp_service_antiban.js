@@ -107,8 +107,17 @@ async function resolveWhatsAppUser(rawPhone) {
     }
 
     const jid = `${clean}@s.whatsapp.net`;
-    const checkResults = await sock.onWhatsApp(jid);
-    const waUser = Array.isArray(checkResults) ? checkResults[0] : null;
+    let waUser = null;
+    try {
+        const checkResults = await Promise.race([
+            sock.onWhatsApp(jid),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500))
+        ]);
+        waUser = Array.isArray(checkResults) ? checkResults[0] : null;
+    } catch (checkErr) {
+        console.warn(`[WhatsApp:onWhatsApp] Check timed out or failed for ${clean}, assuming valid JID:`, checkErr?.message);
+        waUser = { jid, exists: true };
+    }
 
     if (!waUser || !waUser.exists) {
         return {
@@ -928,9 +937,18 @@ app.post('/send-otp', async (req, res) => {
             return res.status(result.status).json(result.body);
         }
 
-        const sent = await sendAntiBanOtpToJid(result.targetJid, code);
-        console.log(`[WhatsApp:send-otp] Sent unique code ${code} to ${result.clean}`);
-        res.json({ success: true, jid: result.targetJid, messageId: sent.key.id });
+        // إرجاع رد فوري للمستخدم دون أي تأخير حتى تنتقل الشاشة لصفحة الكود بأجزاء من الثانية
+        res.json({ success: true, jid: result.targetJid });
+
+        // إرسال الكود في الخلفية بشكل غير متزامن مع محاكاة الكتابة البشرية لمنع الحظر
+        setImmediate(async () => {
+            try {
+                const sent = await sendAntiBanOtpToJid(result.targetJid, code);
+                console.log(`[WhatsApp:send-otp] Sent unique code ${code} to ${result.clean} (msgId: ${sent?.key?.id})`);
+            } catch (err) {
+                console.error(`[WhatsApp:send-otp] Async send failed for ${result.clean}:`, err?.message || err);
+            }
+        });
     } catch (err) {
         console.error('[WhatsApp:send-otp error]', err);
         res.status(500).json({ success: false, error: err.message });

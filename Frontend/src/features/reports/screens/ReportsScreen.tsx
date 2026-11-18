@@ -337,7 +337,6 @@ export function ReportsScreen() {
       setMediaList([]);
       setCurrentView('list');
       setShowSuccessSheet(true);
-      notifyNotificationsListeners();
       // إعادة تحميل البلاغات المعتمدة فقط (البلاغ الجديد لا يظهر حتى يوافق عليه المشرف)
       await loadReports();
     } catch {

@@ -347,6 +347,8 @@ export async function sendWhatsAppOtp(
   deviceFingerprint?: string
 ): Promise<{ ok: boolean; message?: string; error?: string; dev_code?: string }> {
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
     const res = await fetch(`${API_BASE_URL}/auth/send-whatsapp-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -354,7 +356,9 @@ export async function sendWhatsAppOtp(
         phone: phone.trim(),
         device_fingerprint: deviceFingerprint,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     const json = await res.json();
     if (!res.ok || !json?.success) {
       return {
@@ -367,7 +371,13 @@ export async function sendWhatsAppOtp(
       message: json?.message || 'تم إرسال كود التحقق بنجاح إلى واتساب.',
       dev_code: json?.dev_code,
     };
-  } catch {
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      return {
+        ok: false,
+        error: 'انتهت مهلة الاتصال بالخادم، يرجى المحاولة مرة أخرى.',
+      };
+    }
     return {
       ok: false,
       error: 'تعذر الاتصال بالخادم. يرجى التأكد من اتصال الإنترنت.',
