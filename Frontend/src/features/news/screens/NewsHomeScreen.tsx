@@ -1,70 +1,77 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  Vibration,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import LottieView from 'lottie-react-native';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  Easing,
-  Modal,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  Vibration,
-  View,
-} from 'react-native';
+
+import { API_BASE_URL } from '@/core/config/api.config';
+import { WidgetErrorBoundary } from '@/core/error-boundary/WidgetErrorBoundary';
+import { rtlFlexDirection } from '@/core/theme/rtl';
 import {
   useSafeBottomTabPadding,
   useSafeTopInset,
 } from '@/core/theme/useSafeTopInset';
-import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
-import { API_BASE_URL } from '@/core/config/api.config';
-import { WidgetErrorBoundary } from '@/core/error-boundary/WidgetErrorBoundary';
-import { registerHomeScrollToTop } from '@/core/events/scrollEvents';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { NotificationsModal } from '@/features/notifications/components/NotificationsModal';
 import { useNotificationsFeed } from '@/features/notifications/hooks/useNotificationsFeed';
 import { VillageNotificationItem } from '@/features/notifications/types/notifications.types';
-import { publishRealNewsArticle } from '../api/news.api';
+
+import { BASE_HEADER_HEIGHT, NewsHomeHeader } from '../components/NewsHomeHeader';
+import { NewNewsUpdateBanner } from '../components/NewNewsUpdateBanner';
 import { SmallNewsCard } from '../components/SmallNewsCard';
+import { useCollapsibleHeader } from '../hooks/useCollapsibleHeader';
+import { useFeedAutoPlay } from '../hooks/useFeedAutoPlay';
 import { useNewsFeed } from '../hooks/useNewsFeed';
 import { NewsCardItem } from '../types/news.types';
 
-const BASE_HEADER_HEIGHT = 60;
+const INITIAL_PAGE_SIZE = 30;
 
 export function NewsHomeScreen() {
   const router = useRouter();
   const topInset = useSafeTopInset();
   const bottomTabPadding = useSafeBottomTabPadding();
   const { user } = useAuth();
-  const { feed, loading, refreshing, servedFromCache, isOffline, refresh } =
-    useNewsFeed();
+  const { feed, loading, refreshing, isOffline, refresh } = useNewsFeed();
+
   const [showSearch, setShowSearch] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [visibleCount, setVisibleCount] = useState<number>(30);
-  const [showNotificationsModal, setShowNotificationsModal] =
-    useState<boolean>(false);
+  const [visibleCount, setVisibleCount] = useState<number>(INITIAL_PAGE_SIZE);
+  const [showNotificationsModal, setShowNotificationsModal] = useState<boolean>(false);
+  const [hasNewNewsUpdate, setHasNewNewsUpdate] = useState<boolean>(false);
 
-  const navigateByNotificationTarget = (section?: string, targetId?: string) => {
-    setShowNotificationsModal(false);
-    if (section === 'reports') {
-      router.push('/reports');
-    } else if (section === 'craftsmen') {
-      router.push('/craftsmen');
-    } else if (section === 'services') {
-      router.push('/services');
-    } else if (section === 'news') {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-    }
-  };
+  const scrollViewRef = useRef<React.ElementRef<typeof ScrollView>>(null);
+  const lottieRef = useRef<LottieView>(null);
+  const newestNewsIdRef = useRef<string | null>(null);
+  const lastLogoPressFetchRef = useRef<number>(0);
+  const isFetchingRef = useRef<boolean>(false);
+
+  // التنقل عند الضغط على إشعار
+  const navigateByNotificationTarget = useCallback(
+    (section?: string, targetId?: string) => {
+      setShowNotificationsModal(false);
+      if (section === 'reports') {
+        router.push('/reports');
+      } else if (section === 'craftsmen') {
+        router.push('/craftsmen');
+      } else if (section === 'services') {
+        router.push('/services');
+      } else if (section === 'news') {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      }
+    },
+    [router]
+  );
 
   const {
     notifications,
@@ -82,149 +89,7 @@ export function NewsHomeScreen() {
     navigateByNotificationTarget(item.section, item.target_id);
   };
 
-  const scrollViewRef = useRef<React.ElementRef<typeof ScrollView>>(null);
-
-  const headerHeight = showSearch ? BASE_HEADER_HEIGHT + 68 : BASE_HEADER_HEIGHT;
-
-  // متغيرات ومراجع التحكم في حركة الهيدر التفاعلي واللوجو
-  const headerTranslateY = useRef(new Animated.Value(0)).current;
-  const lastScrollY = useRef(0);
-  const isHeaderHidden = useRef(false);
-  const isAnimating = useRef(false);
-  const scrollDelta = useRef(0);
-
-  // إدارة تشغيل الفيديو النشط أثناء التمرير (فيديو واحد فقط يعمل تلقائياً عند توسط الشاشة)
-  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
-  const activeVideoIdRef = useRef<string | null>(null);
-  const cardLayoutsRef = useRef<Map<string, { y: number; height: number }>>(new Map());
-  const listOffsetYRef = useRef<number>(0);
-
-  // مراجع تشغيل أنميشن اللوجو وحماية السيرفر من تكرار الطلبات العشوائية
-  const lottieRef = useRef<LottieView>(null);
-  const lastLogoPressFetchRef = useRef<number>(0);
-  const isFetchingRef = useRef<boolean>(false);
-
-  // تأثير شفافية متناسق ومريح للعين مع الحركة
-  const headerOpacity = headerTranslateY.interpolate({
-    inputRange: [-BASE_HEADER_HEIGHT * 0.7, 0],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-
-  const hideHeader = () => {
-    if (isHeaderHidden.current || isAnimating.current) return;
-    isHeaderHidden.current = true;
-    isAnimating.current = true;
-    Animated.timing(headerTranslateY, {
-      toValue: -headerHeight,
-      duration: 260,
-      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-      useNativeDriver: true,
-    }).start(() => {
-      isAnimating.current = false;
-    });
-  };
-
-  const showHeader = () => {
-    if (!isHeaderHidden.current || isAnimating.current) return;
-    isHeaderHidden.current = false;
-    isAnimating.current = true;
-    Animated.timing(headerTranslateY, {
-      toValue: 0,
-      duration: 220,
-      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-      useNativeDriver: true,
-    }).start(() => {
-      isAnimating.current = false;
-    });
-  };
-
-  const [hasNewNewsUpdate, setHasNewNewsUpdate] = useState<boolean>(false);
-  const newestNewsIdRef = useRef<string | null>(null);
-
-  const handlePullToRefresh = async () => {
-    // هزة تفاعلية لطيفة وخفيفة في الهاتف بمجرد سحب الشاشة لتحديث الأخبار
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {
-        Vibration.vibrate(25);
-      });
-    } catch {
-      Vibration.vibrate(25);
-    }
-    setHasNewNewsUpdate(false);
-    lastLogoPressFetchRef.current = Date.now();
-    await refresh(true);
-  };
-
-  const handleLogoPress = async () => {
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {
-        Vibration.vibrate(25);
-      });
-    } catch {
-      Vibration.vibrate(25);
-    }
-
-    // تشغيل أنميشن اللوجو الأصلي
-    lottieRef.current?.reset();
-    lottieRef.current?.play();
-
-    // الصعود للأعلى بسلاسة تامة
-    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-
-    // إظهار الهيدر فوراً
-    if (isHeaderHidden.current) {
-      isHeaderHidden.current = false;
-      Animated.timing(headerTranslateY, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }).start();
-      scrollDelta.current = 0;
-    }
-
-    // إغلاق البحث إن كان مفتوحاً
-    setShowSearch(false);
-    setSearchQuery('');
-
-    // حماية الخادم من التكرار العشوائي للطلبات:
-    // إذا كان هناك فحص جاري أو تم الفحص حديثاً ولا توجد أخبار جديدة معلنة، لا نرسل طلباً مكرراً
-    const now = Date.now();
-    const timeSinceLast = now - lastLogoPressFetchRef.current;
-    const shouldFetch = hasNewNewsUpdate || timeSinceLast > 12000;
-
-    if (!isFetchingRef.current && shouldFetch) {
-      isFetchingRef.current = true;
-      lastLogoPressFetchRef.current = now;
-      setHasNewNewsUpdate(false);
-      try {
-        // نحدث الأخبار بهدوء (refresh(false)) بدون إظهار دائرة RefreshControl البيضاء المزعجة
-        // وننتظر اكتمال الأنميشن لضمان انسيابية التجربة
-        await Promise.all([
-          refresh(false),
-          new Promise((resolve) => setTimeout(resolve, 850)),
-        ]);
-      } finally {
-        isFetchingRef.current = false;
-      }
-    }
-  };
-
-  useEffect(() => {
-    return registerHomeScrollToTop(() => {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      if (isHeaderHidden.current) {
-        isHeaderHidden.current = false;
-        Animated.timing(headerTranslateY, {
-          toValue: 0,
-          duration: 180,
-          useNativeDriver: true,
-        }).start();
-        scrollDelta.current = 0;
-      }
-    });
-  }, [headerTranslateY]);
-
+  // دمج وتوحيد قائمة الأخبار
   const allNewsList = useMemo(() => {
     const pinned = feed?.pinned_featured ?? [];
     const small = feed?.small_news ?? [];
@@ -245,7 +110,106 @@ export function NewsHomeScreen() {
     }
   }, [allNewsList]);
 
-  // فحص ذكي خفيف على فترات متباعدة لتنبيه المستخدم بوجود جديد دون إغراق السيرفر بطلبات
+  // فلترة البحث
+  const displayedNews = useMemo(() => {
+    if (!searchQuery.trim()) return allNewsList;
+    const q = searchQuery.trim().toLowerCase();
+    return allNewsList.filter(
+      (it) =>
+        it.title.toLowerCase().includes(q) ||
+        it.summary.toLowerCase().includes(q)
+    );
+  }, [allNewsList, searchQuery]);
+
+  // تقسيم الأخبار لحماية استهلاك الذاكرة (30 ثم 30)
+  const visibleNews = useMemo(() => {
+    return displayedNews.slice(0, visibleCount);
+  }, [displayedNews, visibleCount]);
+
+  // هوك إدارة الفيديو الذكي أثناء التمرير
+  const { activeVideoId, updateActiveVideo, onListLayout, onCardLayout } =
+    useFeedAutoPlay(visibleNews);
+
+  // هوك إدارة الهيدر التفاعلي مع السكرول
+  const headerHeight = showSearch ? BASE_HEADER_HEIGHT + 68 : BASE_HEADER_HEIGHT;
+  const {
+    headerTranslateY,
+    headerOpacity,
+    isHeaderHidden,
+    handleScrollHeader,
+    showHeader,
+  } = useCollapsibleHeader({
+    headerHeight,
+    onScrollToTopRequest: () => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    },
+  });
+
+  // معالجة التمرير وتحديث الفيديو والتحميل اللانهائي
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const currentY = contentOffset.y;
+
+    handleScrollHeader(currentY);
+    updateActiveVideo(currentY, layoutMeasurement.height);
+
+    const isCloseToBottom =
+      layoutMeasurement.height + currentY >= contentSize.height - 400;
+    if (isCloseToBottom && displayedNews.length > visibleCount) {
+      setVisibleCount((prev) => Math.min(prev + INITIAL_PAGE_SIZE, displayedNews.length));
+    }
+  };
+
+  // تفاعل الضغط على لوجو المنشية في الهيدر
+  const handleLogoPress = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {
+        Vibration.vibrate(25);
+      });
+    } catch {
+      Vibration.vibrate(25);
+    }
+
+    lottieRef.current?.reset();
+    lottieRef.current?.play();
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    showHeader();
+    setShowSearch(false);
+    setSearchQuery('');
+
+    const now = Date.now();
+    const timeSinceLast = now - lastLogoPressFetchRef.current;
+    const shouldFetch = hasNewNewsUpdate || timeSinceLast > 12000;
+
+    if (!isFetchingRef.current && shouldFetch) {
+      isFetchingRef.current = true;
+      lastLogoPressFetchRef.current = now;
+      setHasNewNewsUpdate(false);
+      try {
+        await Promise.all([
+          refresh(false),
+          new Promise((resolve) => setTimeout(resolve, 850)),
+        ]);
+      } finally {
+        isFetchingRef.current = false;
+      }
+    }
+  };
+
+  const handlePullToRefresh = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
+        Vibration.vibrate(25);
+      });
+    } catch {
+      Vibration.vibrate(25);
+    }
+    setHasNewNewsUpdate(false);
+    lastLogoPressFetchRef.current = Date.now();
+    await refresh(true);
+  };
+
+  // فحص خفيف على فترات متباعدة لتنبيه المستخدم بوجود جديد دون إغراق السيرفر
   useEffect(() => {
     const timer = setInterval(async () => {
       try {
@@ -264,249 +228,47 @@ export function NewsHomeScreen() {
           }
         }
       } catch {
-        // silent
+        // صامت لتفادي أي إزعاج
       }
     }, 45000);
 
     return () => clearInterval(timer);
   }, []);
 
-  const hasAnyNews = allNewsList.length > 0;
-
-  const displayedNews = useMemo(() => {
-    if (!searchQuery.trim()) return allNewsList;
-    const q = searchQuery.trim().toLowerCase();
-    return allNewsList.filter(
-      (it) =>
-        it.title.toLowerCase().includes(q) ||
-        it.summary.toLowerCase().includes(q)
-    );
-  }, [allNewsList, searchQuery]);
-
-  // حماية استهلاك الذاكرة (Memory Optimization): عرض أول 15 خبر وتفريغ الحمل عن المعالج
-  const visibleNews = useMemo(() => {
-    return displayedNews.slice(0, visibleCount);
-  }, [displayedNews, visibleCount]);
-
-  // فحص الفيديو الذي يتوسط الشاشة حالياً وتشغيله هو فقط وإيقاف الباقي فوراً
-  const updateActiveVideo = (scrollY: number, viewportHeight: number) => {
-    const viewportCenter = scrollY + viewportHeight / 2;
-    const listY = listOffsetYRef.current;
-    let closestId: string | null = null;
-    let minDistance = Infinity;
-
-    for (const item of visibleNews) {
-      const hasVid = Boolean(item.video_stream_url);
-      if (!hasVid) continue;
-
-      const layout = cardLayoutsRef.current.get(item.id);
-      if (!layout) continue;
-
-      const absCardY = listY + layout.y;
-      const absCardBottom = absCardY + layout.height;
-
-      // هل البطاقة مرئية حالياً في نطاق الشاشة؟
-      const isVisibleInViewport =
-        absCardBottom > scrollY + 40 && absCardY < scrollY + viewportHeight - 40;
-
-      if (isVisibleInViewport) {
-        const cardCenter = absCardY + layout.height / 2;
-        const dist = Math.abs(cardCenter - viewportCenter);
-        if (dist < minDistance) {
-          minDistance = dist;
-          closestId = item.id;
-        }
-      }
-    }
-
-    if (closestId !== activeVideoIdRef.current) {
-      activeVideoIdRef.current = closestId;
-      setActiveVideoId(closestId);
-    }
-  };
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      updateActiveVideo(lastScrollY.current, Dimensions.get('window').height);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [visibleNews]);
-
-  // معالجة التمرير بحسابات ناعمة وتمرير لا نهائي تلقائي (30 ثم 30)
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const currentY = contentOffset.y;
-
-    // تحديث الفيديو النشط بحسب ما يتوسط نافذة الرؤية
-    updateActiveVideo(currentY, layoutMeasurement.height);
-
-    // تمرير لا نهائي تلقائي (Infinite Scroll): تحميل 30 منشوراً تالياً فور الاقتراب من القاع
-    const isCloseToBottom = layoutMeasurement.height + currentY >= contentSize.height - 400;
-    if (isCloseToBottom && displayedNews.length > visibleCount) {
-      setVisibleCount((prev) => Math.min(prev + 30, displayedNews.length));
-    }
-
-    // أ) إذا كان المستخدم في قمة الصفحة (<= 15px): أظهر الهيدر فوراً وتفادَ ارتداد iOS
-    if (currentY <= 15) {
-      if (isHeaderHidden.current) {
-        isHeaderHidden.current = false;
-        Animated.timing(headerTranslateY, {
-          toValue: 0,
-          duration: 180,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }).start();
-      }
-      scrollDelta.current = 0;
-      lastScrollY.current = currentY;
-      return;
-    }
-
-    const diff = currentY - lastScrollY.current;
-    lastScrollY.current = currentY;
-
-    // ب) السحب لأسفل (Scroll Down): إخفاء ناعم بعد تحرك فعلي 18px وتجاوز 50px من القمة
-    if (diff > 0 && currentY > 50) {
-      scrollDelta.current = Math.max(0, scrollDelta.current + diff);
-      if (scrollDelta.current >= 18) {
-        scrollDelta.current = 0;
-        hideHeader();
-      }
-    } else if (diff < 0) {
-      // ج) السحب لأعلى (Scroll Up): إظهار فوري وسلس بعد تحرك 16px للأعلى
-      scrollDelta.current = Math.min(0, scrollDelta.current + diff);
-      if (scrollDelta.current <= -16) {
-        scrollDelta.current = 0;
-        showHeader();
-      }
-    }
-  };
-
   return (
     <View style={styles.screenContainer}>
-      {/* ١. درع شريط الإشعارات الثابت: يضمن بقاء شريط الإشعارات نظيفاً وعدم ظهور المحتوى أو تداخله فيه أبداً */}
+      {/* درع شريط الحالة العلوي */}
       <View
         style={[styles.statusBarShield, { height: topInset }]}
         pointerEvents="none"
       />
 
-      {/* ٢. الهيدر التفاعلي الذكي: يبدأ أسفل شريط الإشعارات مباشرة وبحركة سلسة ومريحة للعين */}
-      <Animated.View
-        pointerEvents="box-none"
-        style={[
-          styles.collapsibleHeaderWrap,
-          {
-            top: topInset,
-            opacity: headerOpacity,
-            transform: [{ translateY: headerTranslateY }],
-          },
-        ]}>
-        <View style={styles.headerRow} pointerEvents="box-none">
-          {/* في اليمين: اللوجو تفاعلي عند النقر يشغل الأنميشن ويصعد لأعلى ويجلب المحتوى الجديد */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.headerRightGroup,
-              pressed && { opacity: 0.8, transform: [{ scale: 0.96 }] },
-            ]}
-            onPress={handleLogoPress}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="العودة لأعلى الأخبار وتحديث الصفحة">
-            <LottieView
-              ref={lottieRef}
-              source={require('../../../../assets/json/logo.json')}
-              autoPlay={false}
-              loop={false}
-              progress={1}
-              style={styles.headerLottie}
-            />
-          </Pressable>
+      {/* الهيدر التفاعلي المستقل */}
+      <NewsHomeHeader
+        topInset={topInset}
+        headerTranslateY={headerTranslateY}
+        headerOpacity={headerOpacity}
+        showSearch={showSearch}
+        searchQuery={searchQuery}
+        unreadCount={unreadCount}
+        lottieRef={lottieRef}
+        onPressLogo={handleLogoPress}
+        onToggleSearch={() => setShowSearch((prev) => !prev)}
+        onChangeSearch={setSearchQuery}
+        onClearSearch={() => setSearchQuery('')}
+        onPressNotifications={() => {
+          setShowNotificationsModal(true);
+          refreshNotifications();
+        }}
+      />
 
-          {/* في الشمال: عدسة البحث + جرس التنبيهات (تطبيق القراءة للمواطنين محمي تماماً ولا يحتوي على نشر) */}
-          <View style={styles.headerLeftGroup} pointerEvents="auto">
-            {/* عدسة البحث الشفافة بدون أي بوكس أو خلفية */}
-            <Pressable
-              style={styles.headerIconButton}
-              onPress={() => setShowSearch((prev) => !prev)}>
-              <Ionicons
-                name={showSearch ? 'close-outline' : 'search-outline'}
-                size={23}
-                color={showSearch ? '#973c00' : '#1E293B'}
-              />
-            </Pressable>
-
-            {/* جرس الإشعارات الشفاف مع عداد حقيقي يعمل فقط عند وجود إشعارات غير مقروءة */}
-            <Pressable
-              style={styles.headerIconButton}
-              onPress={() => {
-                setShowNotificationsModal(true);
-                refreshNotifications();
-              }}>
-              <Ionicons name="notifications-outline" size={23} color="#1E293B" />
-              {unreadCount > 0 ? (
-                <View style={styles.notifCountBadge}>
-                  <Text style={styles.notifCountText}>
-                    {unreadCount}
-                  </Text>
-                </View>
-              ) : null}
-            </Pressable>
-          </View>
-        </View>
-
-        {/* حقل البحث السريع في الأخبار بتصميم كارت أبيض نقي بدون اقتصاص الحروف */}
-        {showSearch ? (
-          <View style={styles.searchBarWrap} pointerEvents="auto">
-            <Ionicons name="search-outline" size={20} color="#973c00" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="ابحث في أخبار القرية بالعنوان أو النص..."
-              placeholderTextColor="#94A3B8"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoFocus
-              returnKeyType="search"
-            />
-            {searchQuery ? (
-              <Pressable
-                onPress={() => setSearchQuery('')}
-                hitSlop={10}
-                style={styles.clearSearchBtn}>
-                <Ionicons name="close-circle" size={19} color="#94A3B8" />
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
-      </Animated.View>
-
-      {/* شريط تنبيه وجود أخبار جديدة: ينبه المستخدم لتحديث الشاشة أو سحبها بدل تكرار الطلبات */}
-      {hasNewNewsUpdate ? (
-        <View
-          pointerEvents="box-none"
-          style={[
-            styles.newNewsBannerWrap,
-            {
-              top:
-                topInset +
-                (showSearch ? BASE_HEADER_HEIGHT + 66 : BASE_HEADER_HEIGHT) +
-                8,
-            },
-          ]}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.newNewsBannerBtn,
-              pressed && styles.newNewsBannerBtnPressed,
-            ]}
-            onPress={handleLogoPress}>
-            <View style={styles.newNewsPulseDot} />
-            <Ionicons name="sparkles" size={15} color="#FFFFFF" />
-            <Text style={styles.newNewsBannerText}>
-              يوجد أخبار وتحديثات جديدة • اضغط أو اسحب للتحديث
-            </Text>
-            <Ionicons name="arrow-up" size={14} color="#FFFFFF" />
-          </Pressable>
-        </View>
-      ) : null}
+      {/* شريط الإشعار بوجود أخبار جديدة */}
+      <NewNewsUpdateBanner
+        visible={hasNewNewsUpdate}
+        topInset={topInset}
+        showSearch={showSearch}
+        onPress={handleLogoPress}
+      />
 
       <ScrollView
         ref={scrollViewRef}
@@ -526,9 +288,6 @@ export function NewsHomeScreen() {
         nestedScrollEnabled={true}
         keyboardShouldPersistTaps="handled"
         canCancelContentTouches={true}
-        directionalLockEnabled={false}
-        alwaysBounceVertical={true}
-        overScrollMode="always"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -551,7 +310,7 @@ export function NewsHomeScreen() {
           <ActivityIndicator size="large" color="#0284C7" />
         ) : null}
 
-        {!loading && !hasAnyNews ? (
+        {!loading && allNewsList.length === 0 ? (
           <View style={styles.emptyBox}>
             <Ionicons name="newspaper-outline" size={38} color="#94A3B8" />
             <Text style={styles.emptyTitle}>مفيش أخبار منشورة لحد دلوقتي</Text>
@@ -562,7 +321,7 @@ export function NewsHomeScreen() {
         ) : null}
 
         <WidgetErrorBoundary widgetNameAr="قائمة الأخبار">
-          {(displayedNews?.length ?? 0) > 0 ? (
+          {displayedNews.length > 0 ? (
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionHeader}>
                 {searchQuery ? 'نتائج البحث' : 'آخر أخبار القرية'}
@@ -577,22 +336,18 @@ export function NewsHomeScreen() {
               </Text>
             </View>
           ) : null}
-          {(displayedNews?.length ?? 0) > 0 ? (
-            <View
-              style={styles.smallNewsList}
-              onLayout={(e) => {
-                listOffsetYRef.current = e.nativeEvent.layout.y;
-              }}>
+
+          {displayedNews.length > 0 ? (
+            <View style={styles.smallNewsList} onLayout={onListLayout}>
               {visibleNews.map((item) => (
                 <SmallNewsCard
                   key={item.id}
                   item={item}
                   isActive={activeVideoId === item.id}
-                  onLayout={(e) => {
-                    cardLayoutsRef.current.set(item.id, e.nativeEvent.layout);
-                  }}
+                  onLayout={(e) => onCardLayout(item.id, e)}
                 />
               ))}
+
               {displayedNews.length > visibleCount ? (
                 <View style={styles.infiniteLoadingBox}>
                   <ActivityIndicator size="small" color="#973c00" />
@@ -606,7 +361,7 @@ export function NewsHomeScreen() {
         </WidgetErrorBoundary>
       </ScrollView>
 
-      {/* موديول الإشعارات الموحّد لجميع أقسام التطبيق */}
+      {/* نافذة الإشعارات الموحدة */}
       <NotificationsModal
         visible={showNotificationsModal}
         notifications={notifications}
@@ -632,52 +387,35 @@ const styles = StyleSheet.create({
     zIndex: 150,
     backgroundColor: '#FAF5EE',
   },
-  collapsibleHeaderWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 100,
+  scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 8,
-    backgroundColor: '#FAF5EE',
+    paddingTop: 8,
+    paddingBottom: 5,
   },
-  newNewsBannerWrap: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    zIndex: 120,
-    alignItems: 'center',
+  sectionHeaderRow: {
+    marginBottom: 12,
   },
-  newNewsBannerBtn: {
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'right',
+  },
+  smallNewsList: {
+    gap: 12,
+  },
+  infiniteLoadingBox: {
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#973c00',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    elevation: 8,
-    shadowColor: '#973c00',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
+    paddingVertical: 18,
+    marginBottom: 10,
   },
-  newNewsBannerBtnPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  newNewsPulseDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#4ADE80',
-  },
-  newNewsBannerText: {
-    color: '#FFFFFF',
+  infiniteLoadingText: {
     fontSize: 12.5,
-    fontWeight: '700',
-    textAlign: rtlTextAlign,
+    color: '#64748B',
+    fontWeight: '600',
   },
   offlineNoticeWrap: {
     flexDirection: rtlFlexDirection,
@@ -698,225 +436,28 @@ const styles = StyleSheet.create({
     color: '#92400E',
     textAlign: 'center',
   },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 5,
-  },
-  smallNewsList: {
-    gap: 12,
-  },
-  infiniteLoadingBox: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 18,
-    marginBottom: 10,
-  },
-  infiniteLoadingText: {
-    fontSize: 12.5,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  headerRow: {
-    flexDirection: rtlFlexDirection,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-  },
-  headerRightGroup: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerLottie: {
-    width: 44,
-    height: 44,
-  },
-  headerLeftGroup: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerIconButton: {
-    width: 38,
-    height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    backgroundColor: 'transparent',
-  },
-  notifCountBadge: {
-    position: 'absolute',
-    top: 2,
-    left: 2,
-    minWidth: 17,
-    height: 17,
-    borderRadius: 9,
-    backgroundColor: '#973c00',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 1.5,
-    borderColor: '#FAF5EE',
-  },
-  notifCountText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '800',
-    lineHeight: 12,
-  },
-  searchBarWrap: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#FED7AA',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    height: 48,
-    marginTop: 10,
-    elevation: 3,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-  },
-  searchInput: {
-    flex: 1,
-    height: 48,
-    fontSize: 14,
-    color: '#0F172A',
-    textAlign: 'right',
-    writingDirection: 'rtl',
-    paddingVertical: 0,
-    textAlignVertical: 'center',
-  },
-  clearSearchBtn: {
-    padding: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cacheChip: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-  cacheChipText: {
-    color: '#047857',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  addBtn: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#973c00',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-  },
-  addBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  formCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    marginBottom: 16,
-    gap: 10,
-  },
-  formTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0C4A6E',
-    textAlign: 'right',
-  },
-  input: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 44,
-    fontSize: 13,
-    color: '#0F172A',
-    textAlign: 'right',
-  },
-  textArea: {
-    height: 76,
-    paddingTop: 10,
-  },
-  switchRow: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    gap: 10,
-  },
-  switchLabel: {
-    fontSize: 13,
-    color: '#334155',
-    textAlign: 'right',
-  },
-  submitBtn: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#973c00',
-    paddingVertical: 12,
-    borderRadius: 10,
-  },
-  submitBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
   emptyBox: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 28,
+    marginVertical: 20,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    alignItems: 'center',
-    marginVertical: 16,
   },
   emptyTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 10,
-    marginBottom: 4,
+    color: '#334155',
+    marginTop: 12,
+    textAlign: 'center',
   },
   emptyDesc: {
     fontSize: 13,
     color: '#64748B',
+    marginTop: 6,
     textAlign: 'center',
     lineHeight: 20,
-  },
-  sectionHeaderRow: {
-    width: '100%',
-    flexDirection: rtlFlexDirection,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  sectionHeader: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
-    textAlign: rtlTextAlign,
-    writingDirection: 'rtl',
   },
 });
