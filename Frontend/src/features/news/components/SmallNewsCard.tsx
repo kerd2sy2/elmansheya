@@ -164,7 +164,8 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
   const hasImage = Boolean(directCoverUrl);
   const hasVideo = Boolean(directVideoUrl);
 
-  const isLongSummary = (item.summary?.length ?? 0) > 110;
+  const isLongSummary =
+    (item.summary?.length ?? 0) > 80 || (item.summary || '').includes('\n');
 
   const { cleanName, roleTitle } = parseAuthorInfo(
     item.author_display_name,
@@ -224,7 +225,7 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
       <View style={styles.textWrap}>
         <Text
           style={styles.summary}
-          numberOfLines={isLongSummary && !isExpanded ? 3 : undefined}>
+          numberOfLines={isLongSummary && !isExpanded ? 2 : undefined}>
           {item.summary}
         </Text>
         {isLongSummary ? (
@@ -233,11 +234,11 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
             onPress={toggleExpand}
             hitSlop={8}>
             <Text style={styles.expandTextLabel}>
-              {isExpanded ? 'عرض أقل' : 'عرض المزيد...'}
+              {isExpanded ? 'أقل' : 'المزيد'}
             </Text>
             <Ionicons
               name={isExpanded ? 'chevron-up' : 'chevron-down'}
-              size={14}
+              size={13}
               color="#973c00"
             />
           </Pressable>
