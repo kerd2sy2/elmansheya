@@ -86,12 +86,8 @@ function NativeExoPlayerView({
   const [isMuted, setIsMuted] = useState<boolean>(true);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [manuallyPaused, setManuallyPaused] = useState<boolean>(false);
-  const [showStatusToast, setShowStatusToast] = useState<boolean>(false);
 
   const mutePressTimeRef = useRef<number>(0);
-  const toastTimerRef = useRef<any>(null);
-  const scaleMuteAnim = useRef(new Animated.Value(1)).current;
-  const statusOpacity = useRef(new Animated.Value(0)).current;
 
   // حماية صارمة لذاكرة أندرويد: حصر كاش الفيديو بـ 4MB كحد أقصى لمنع الـ OOM
   const videoSource = useMemo(() => ({
@@ -106,12 +102,6 @@ function NativeExoPlayerView({
     p.loop = true;
     p.muted = true;
   });
-
-  useEffect(() => {
-    return () => {
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    };
-  }, []);
 
   useEffect(() => {
     if (!player) return;
@@ -170,8 +160,8 @@ function NativeExoPlayerView({
 
   // الضغط المباشر على الفيديو للإيقاف المؤقت أو التشغيل
   const handleTogglePlayPause = () => {
-    // درع حماية حاسم: إذا كان المستخدم ضغط على زر الصوت في آخر 450ms، يمنع إيقاف الفيديو نهائياً
-    if (Date.now() - mutePressTimeRef.current < 450) {
+    // درع حماية حاسم: إذا كان المستخدم ضغط على زر الصوت في آخر 700ms، يمنع إيقاف الفيديو نهائياً
+    if (Date.now() - mutePressTimeRef.current < 700) {
       return;
     }
     if (!player) return;
@@ -188,40 +178,16 @@ function NativeExoPlayerView({
     }
   };
 
-  // تبديل الصوت بشكل موثوق وسلس جداً مع تأثير بصري احترافي
+  // تبديل الصوت بشكل فوري ومباشر وسلس بدون أي لاج أو لخبطة أو تداخل
   const handleToggleMute = (e?: any) => {
     e?.stopPropagation?.();
     mutePressTimeRef.current = Date.now();
     if (!player) return;
 
     try {
-      const nextMuted = !isMuted;
+      const nextMuted = !Boolean(player.muted);
       player.muted = nextMuted;
-      if (!nextMuted) {
-        player.volume = 1.0;
-      }
       setIsMuted(nextMuted);
-
-      // نبض زنبركي سلس لأيقونة الصوت
-      scaleMuteAnim.setValue(0.75);
-      Animated.spring(scaleMuteAnim, {
-        toValue: 1,
-        friction: 4,
-        tension: 140,
-        useNativeDriver: true,
-      }).start();
-
-      // إشعار سحابي مرئي فوري بحالة الصوت في منتصف الفيديو
-      setShowStatusToast(true);
-      statusOpacity.setValue(1);
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = setTimeout(() => {
-        Animated.timing(statusOpacity, {
-          toValue: 0,
-          duration: 280,
-          useNativeDriver: true,
-        }).start(() => setShowStatusToast(false));
-      }, 950);
     } catch {}
   };
 
@@ -269,38 +235,21 @@ function NativeExoPlayerView({
         ) : null}
       </Pressable>
 
-      {/* بادج مرئي فوري عائم لحالة الصوت (كتم / تشغيل) */}
-      {showStatusToast ? (
-        <Animated.View
-          style={[styles.soundToastOverlay, { opacity: statusOpacity }]}
-          pointerEvents="none">
-          <View style={styles.soundToastPill}>
-            <Ionicons
-              name={isMuted ? 'volume-mute' : 'volume-high'}
-              size={19}
-              color="#FFFFFF"
-            />
-            <Text style={styles.soundToastText}>
-              {isMuted ? 'تم كتم الصوت' : 'تم تشغيل الصوت'}
-            </Text>
-          </View>
-        </Animated.View>
-      ) : null}
-
-      {/* زر كتم وفتح الصوت: في طبقة علوية مستقلة تماماً عن مساحة ضغط الفيديو مع أنيميشن النبض */}
+      {/* زر كتم وفتح الصوت: محمي تماماً من إيقاف الفيديو وبدون أي نصوص تظهر على الشاشة */}
       <View style={styles.controlsBottomRow} pointerEvents="box-none">
         <Pressable
           style={styles.circleControlBtn}
+          onPressIn={() => {
+            mutePressTimeRef.current = Date.now();
+          }}
           onPress={handleToggleMute}
-          hitSlop={14}
+          hitSlop={12}
           accessibilityLabel="كتم أو تشغيل الصوت">
-          <Animated.View style={{ transform: [{ scale: scaleMuteAnim }] }}>
-            <Ionicons
-              name={isMuted ? 'volume-mute' : 'volume-high'}
-              size={18}
-              color="#FFFFFF"
-            />
-          </Animated.View>
+          <Ionicons
+            name={isMuted ? 'volume-mute' : 'volume-high'}
+            size={18}
+            color="#FFFFFF"
+          />
         </Pressable>
       </View>
     </View>
@@ -651,32 +600,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.25)',
-  },
-  soundToastOverlay: {
-    ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 25,
-  },
-  soundToastPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(15, 23, 42, 0.88)',
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  soundToastText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
   },
 });
