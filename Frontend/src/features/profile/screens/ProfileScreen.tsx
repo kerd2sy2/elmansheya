@@ -31,6 +31,7 @@ import { useAuth } from '@/features/auth/context/AuthContext';
 import { changeUserPassword } from '@/features/auth/api/auth.api';
 import * as Haptics from 'expo-haptics';
 import { API_BASE_URL } from '@/core/config/api.config';
+import { uploadMediaToDrive } from '@/core/storage/driveUpload';
 import { VerificationModal } from '../components/VerificationModal';
 import { ReportTrackingModal } from '@/features/reports/components/ReportTrackingModal';
 import {
@@ -236,6 +237,24 @@ export function ProfileScreen() {
     return user.full_name.slice(0, 2);
   }, [user.full_name]);
 
+  const uploadAndSaveAvatar = async (asset: ImagePicker.ImagePickerAsset) => {
+    try {
+      const driveUrl = await uploadMediaToDrive({
+        uri: asset.uri,
+        section: 'profile',
+        mediaType: 'image',
+        fileName: asset.fileName ?? undefined,
+        base64: asset.base64,
+      });
+      updateProfile({ avatar_url: driveUrl });
+    } catch (err: any) {
+      Alert.alert(
+        'تعذر رفع الصورة',
+        err?.message || 'تعذر حفظ الصورة الشخصية على Google Drive، يرجى المحاولة مجدداً.'
+      );
+    }
+  };
+
   // التقاط صورة بالكاميرا مباشرة دون شاشة قص
   const handleTakePhoto = async () => {
     setShowChangePhotoSheet(false);
@@ -248,9 +267,10 @@ export function ProfileScreen() {
       const res = await ImagePicker.launchCameraAsync({
         allowsEditing: false,
         quality: 0.8,
+        base64: true,
       });
       if (!res.canceled && res.assets[0]?.uri) {
-        updateProfile({ avatar_url: res.assets[0].uri });
+        await uploadAndSaveAvatar(res.assets[0]);
       }
     } catch {
       Alert.alert('خطأ', 'تعذر التقاط الصورة عبر الكاميرا');
@@ -265,9 +285,10 @@ export function ProfileScreen() {
         mediaTypes: ['images'],
         allowsEditing: false,
         quality: 0.8,
+        base64: true,
       });
       if (!res.canceled && res.assets[0]?.uri) {
-        updateProfile({ avatar_url: res.assets[0].uri });
+        await uploadAndSaveAvatar(res.assets[0]);
       }
     } catch {
       Alert.alert('خطأ', 'تعذر اختيار الصورة من المعرض');

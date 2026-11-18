@@ -55,8 +55,8 @@ func main() {
 	srv := &http.Server{
 		Addr:         ":" + cfg.HTTPPort,
 		Handler:      enableCORS(rootMux),
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		ReadTimeout:  180 * time.Second,
+		WriteTimeout: 180 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 

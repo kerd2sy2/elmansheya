@@ -82,7 +82,7 @@ export function AdminDashboardScreen() {
       if (res.ok && json.success) {
         Alert.alert(
           '🎉 تم ربط سحابة Google Drive بنجاح!',
-          `تم تفعيل حساب الـ 5 تيرا للرفع المباشر.\n\nالمجلد: تطبيق_المنشية\nحساب الخدمة: ${json.data?.client_email || ''}\n\nالآن سيتم حفظ جميع الصور والفيديوهات مباشرة على جوجل درايف وستكون سرعة التحميل فائقة للمواطنين وبدون استهلاك أي مساحة أو ترافيك من السيرفر.`
+          `تم تفعيل حساب الـ 5 تيرا للرفع المباشر.\n\nالمجلد: Elmansheya\nحساب الخدمة: ${json.data?.client_email || ''}\n\nالآن سيتم حفظ جميع الصور والفيديوهات مباشرة على جوجل درايف وستكون سرعة التحميل فائقة للمواطنين وبدون استهلاك أي مساحة أو ترافيك من السيرفر.`
         );
         setShowDriveModal(false);
         setDriveJsonInput('');
@@ -249,7 +249,7 @@ export function AdminDashboardScreen() {
                 <View style={styles.greenActiveDot} />
               </View>
               <Text style={styles.driveStatusSubSuccess}>
-                الرفع مباشر على سحابتك في مجلد «تطبيق_المنشية» • استهلاك وضغط السيرفر 0%
+                الرفع مباشر على سحابتك في مجلد «Elmansheya» • استهلاك وضغط السيرفر 0%
               </Text>
               {driveClientEmail ? (
                 <Text style={styles.driveEmailText} numberOfLines={1}>
@@ -599,7 +599,7 @@ export function AdminDashboardScreen() {
                   ٤. الصق محتوى ملف JSON في المربع أدناه واضغط "تفعيل سحابة Google Drive".
                 </Text>
                 <Text style={styles.driveGuideStep}>
-                  ٥. افتح Google Drive وشارك مجلد «تطبيق_المنشية» مع إيميل الـ Service Account بصلاحية محرر (Editor).
+                  ٥. افتح Google Drive وشارك مجلد «Elmansheya» مع إيميل الـ Service Account بصلاحية محرر (Editor).
                 </Text>
               </View>
 

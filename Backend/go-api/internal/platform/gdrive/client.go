@@ -25,6 +25,21 @@ import (
 	"time"
 )
 
+const DriveRootFolder = "Elmansheya"
+
+var AllSectionFolders = []string{
+	"الأخبار_والتغطيات",
+	"البلاغات_والشكاوى",
+	"الصنايعية_والحرفيين",
+	"الخدمات_والمرافق",
+	"المناسبات_والعزاء",
+	"الحالات_الإنسانية",
+	"الصحة_والطوارئ",
+	"الملفات_الشخصية",
+}
+
+var MediaSubfolders = []string{"صور", "فيديوهات"}
+
 type ServiceAccountKey struct {
 	Type        string `json:"type"`
 	ProjectID   string `json:"project_id"`
@@ -93,10 +108,15 @@ func (c *Client) detectRclone() {
 		filepath.Join("tools", "rclone.exe"),
 		filepath.Join("..", "tools", "rclone.exe"),
 		filepath.Join("Backend", "go-api", "tools", "rclone.exe"),
+		filepath.Join("tools", "rclone"),
+		"/usr/bin/rclone",
+		"/usr/local/bin/rclone",
 		"rclone.exe",
 		"rclone",
 	}
 
+	c.rclonePath = ""
+	c.rcloneRemote = ""
 	for _, p := range candidates {
 		if _, err := os.Stat(p); err == nil {
 			c.rclonePath = p
@@ -109,7 +129,7 @@ func (c *Client) detectRclone() {
 	}
 
 	if c.rclonePath == "" {
-		c.rclonePath = filepath.Join("tools", "rclone.exe")
+		return
 	}
 
 	// فحص قائمة الريموتات المسجلة في Rclone
@@ -375,6 +395,46 @@ func (c *Client) GetOrCreateFolder(folderName string, parentID string) (string, 
 	return created.ID, nil
 }
 
+// EnsureFolderStructure ينشئ شجرة مجلدات Elmansheya وجميع الأقسام ومجلدي صور وفيديوهات على Google Drive
+func (c *Client) EnsureFolderStructure() error {
+	c.mu.RLock()
+	remote := c.rcloneRemote
+	rcloneExe := c.rclonePath
+	c.mu.RUnlock()
+
+	if remote != "" && rcloneExe != "" {
+		if out, err := exec.Command(rcloneExe, "mkdir", fmt.Sprintf("%s:%s", remote, DriveRootFolder)).CombinedOutput(); err != nil {
+			return fmt.Errorf("فشل إنشاء مجلد %s: %v (%s)", DriveRootFolder, err, string(out))
+		}
+		for _, sec := range AllSectionFolders {
+			for _, sub := range MediaSubfolders {
+				target := fmt.Sprintf("%s:%s/%s/%s", remote, DriveRootFolder, sec, sub)
+				if out, err := exec.Command(rcloneExe, "mkdir", target).CombinedOutput(); err != nil {
+					return fmt.Errorf("فشل إنشاء مجلد %s: %v (%s)", target, err, string(out))
+				}
+			}
+		}
+		return nil
+	}
+
+	rootID, err := c.GetOrCreateFolder(DriveRootFolder, "")
+	if err != nil {
+		return err
+	}
+	for _, sec := range AllSectionFolders {
+		secID, err := c.GetOrCreateFolder(sec, rootID)
+		if err != nil {
+			return err
+		}
+		for _, sub := range MediaSubfolders {
+			if _, err := c.GetOrCreateFolder(sub, secID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // UploadDirectToDrive يرفع الملف مباشرة على Google Drive ويجعله عاماً للقراءة ويولد رابط البث فائق السرعة
 func (c *Client) UploadDirectToDrive(
 	sectionFolder string,
@@ -399,8 +459,8 @@ func (c *Client) UploadDirectToDrive(
 		return "", "", err
 	}
 
-	// 1. ضمان وجود شجرة المجلدات: تطبيق_المنشية -> القسم -> نوع الميديا
-	rootID, err := c.GetOrCreateFolder("تطبيق_المنشية", "")
+	// 1. ضمان وجود شجرة المجلدات: Elmansheya -> القسم -> نوع الميديا
+	rootID, err := c.GetOrCreateFolder(DriveRootFolder, "")
 	if err != nil {
 		return "", "", err
 	}
@@ -494,16 +554,21 @@ func (c *Client) uploadViaRclone(
 	fileData []byte,
 	mimeType string,
 ) (directURL string, fileID string, err error) {
-	tempDir := filepath.Join("data", "temp_uploads")
-	_ = os.MkdirAll(tempDir, 0755)
-	tempPath := filepath.Join(tempDir, filename)
-
-	if err := os.WriteFile(tempPath, fileData, 0644); err != nil {
+	ext := filepath.Ext(filename)
+	tmpFile, err := os.CreateTemp("", "elmansheya_upload_*"+ext)
+	if err != nil {
 		return "", "", fmt.Errorf("تعذر إنشاء ملف مؤقت للرفع: %w", err)
 	}
+	tempPath := tmpFile.Name()
+	if _, writeErr := tmpFile.Write(fileData); writeErr != nil {
+		_ = tmpFile.Close()
+		_ = os.Remove(tempPath)
+		return "", "", fmt.Errorf("تعذر كتابة الملف المؤقت للرفع: %w", writeErr)
+	}
+	_ = tmpFile.Close()
 	defer os.Remove(tempPath) // حذف الملف المؤقت فور انتهاء الرفع (0 بايت على السيرفر)
 
-	targetDrivePath := fmt.Sprintf("%s:تطبيق_المنشية/%s/%s/%s", c.rcloneRemote, sectionFolder, mediaFolder, filename)
+	targetDrivePath := fmt.Sprintf("%s:%s/%s/%s/%s", c.rcloneRemote, DriveRootFolder, sectionFolder, mediaFolder, filename)
 
 	// أ. رفع الملف إلى المجلد السحابي المحدد على حساب الـ 5 تيرا
 	cmdCopy := exec.Command(c.rclonePath, "copyto", tempPath, targetDrivePath)
@@ -521,6 +586,19 @@ func (c *Client) uploadViaRclone(
 	outLink, _ := cmdLink.Output()
 	publicLink := strings.TrimSpace(string(outLink))
 
+	if fileID == "" && publicLink != "" {
+		if parsed, parseErr := url.Parse(publicLink); parseErr == nil {
+			if idParam := parsed.Query().Get("id"); idParam != "" {
+				fileID = idParam
+			} else if strings.Contains(parsed.Path, "/file/d/") {
+				parts := strings.Split(parsed.Path, "/file/d/")
+				if len(parts) > 1 {
+					fileID = strings.Split(parts[1], "/")[0]
+				}
+			}
+		}
+	}
+
 	// د. توليد رابط الـ CDN المباشر عالي السرعة
 	if fileID != "" {
 		if strings.HasPrefix(mimeType, "video/") || strings.HasSuffix(filename, ".mp4") {
@@ -531,7 +609,7 @@ func (c *Client) uploadViaRclone(
 	} else if publicLink != "" {
 		directURL = publicLink
 	} else {
-		directURL = fmt.Sprintf("https://drive.google.com/uc?export=view&id=%s", filename)
+		return "", "", errors.New("تم الرفع إلى Google Drive ولكن تعذر استخراج رابط الملف العام")
 	}
 
 	return directURL, fileID, nil

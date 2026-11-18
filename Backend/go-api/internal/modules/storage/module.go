@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -16,31 +17,50 @@ import (
 	"elmansheya/go-api/internal/platform/response"
 )
 
+type SectionDefinition struct {
+	ID       string
+	NameAr   string
+	FolderAr string
+}
+
+var StorageSections = []SectionDefinition{
+	{ID: "news", NameAr: "الأخبار والتغطيات", FolderAr: "الأخبار_والتغطيات"},
+	{ID: "reports", NameAr: "البلاغات والشكاوى", FolderAr: "البلاغات_والشكاوى"},
+	{ID: "craftsmen", NameAr: "الصنايعية والحرفيين", FolderAr: "الصنايعية_والحرفيين"},
+	{ID: "services", NameAr: "الخدمات والمرافق", FolderAr: "الخدمات_والمرافق"},
+	{ID: "events", NameAr: "المناسبات والعزاء", FolderAr: "المناسبات_والعزاء"},
+	{ID: "humanitarian", NameAr: "الحالات الإنسانية", FolderAr: "الحالات_الإنسانية"},
+	{ID: "healthcare", NameAr: "الصحة والطوارئ", FolderAr: "الصحة_والطوارئ"},
+	{ID: "profile", NameAr: "الملفات الشخصية", FolderAr: "الملفات_الشخصية"},
+}
+
+// ResolveSectionFolder يطابق معرف القسم مع مجلده الرسمي داخل Elmansheya على Google Drive
+func ResolveSectionFolder(section string) string {
+	key := strings.ToLower(strings.TrimSpace(section))
+	for _, s := range StorageSections {
+		if s.ID == key || s.FolderAr == section {
+			return s.FolderAr
+		}
+	}
+	return "الأخبار_والتغطيات"
+}
+
 type Module struct {
-	baseDir     string
 	driveClient *gdrive.Client
 }
 
 func NewModule() *Module {
-	base := filepath.Join("data", "Elmansheya_App")
-	sections := []string{
-		"الأخبار_والتغطيات",
-		"الخدمات_والمرافق",
-		"الصنايعية_والحرفيين",
-		"المناسبات_والعزاء",
-	}
-	subfolders := []string{"صور", "فيديوهات"}
-
-	for _, sec := range sections {
-		for _, sub := range subfolders {
-			dirPath := filepath.Join(base, sec, sub)
-			_ = os.MkdirAll(dirPath, 0755)
-		}
+	client := gdrive.NewClient()
+	if client.IsConfigured() {
+		go func() {
+			if err := client.EnsureFolderStructure(); err != nil {
+				log.Printf("[Storage] تعذر تهيئة مجلدات Google Drive (%s): %v", gdrive.DriveRootFolder, err)
+			}
+		}()
 	}
 
 	return &Module{
-		baseDir:     base,
-		driveClient: gdrive.NewClient(),
+		driveClient: client,
 	}
 }
 
@@ -78,15 +98,16 @@ func (m *Module) handleDriveStatus(w http.ResponseWriter, r *http.Request) {
 		"provider":              provider,
 		"rclone_remote":         rcloneRemote,
 		"client_email":          clientEmail,
-		"target_root_folder":    "تطبيق_المنشية",
+		"target_root_folder":    gdrive.DriveRootFolder,
+		"server_disk_storage":   false,
 		"storage_mode": func() string {
 			if configured {
 				return "direct_google_drive_5tb"
 			}
-			return "local_ready_for_drive_sync"
+			return "drive_not_connected_zero_server_storage"
 		}(),
 		"credentials_file_path": "Backend/go-api/data/google_drive_credentials.json",
-		"instructions_ar": "تم إعداد أداة Rclone. شغل ملف 'ربط_سحابة_جوجل_درايف_Rclone.bat' للمصادقة بضغطة واحدة بحسابك الـ 5 تيرا.",
+		"instructions_ar":       "تم تهيئة مجلد Elmansheya وتقسيمه حسب الأقسام (صور / فيديوهات) على سحابة جوجل درايف 5 تيرا بدون تخزين أي ملفات على السيرفر.",
 	}, nil)
 }
 
@@ -132,28 +153,83 @@ func (m *Module) handleDriveConfigure(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// التحقق واختبار الوصول إلى مجلد تطبيق_المنشية على جوجل درايف
-	rootID, err := m.driveClient.GetOrCreateFolder("تطبيق_المنشية", "")
+	// التحقق واختبار الوصول إلى مجلد Elmansheya وإنشاء شجرة الأقسام على جوجل درايف
+	rootID, err := m.driveClient.GetOrCreateFolder(gdrive.DriveRootFolder, "")
 	if err != nil {
 		response.JSON(w, http.StatusOK, "storage", "v1", map[string]interface{}{
 			"success":                 true,
 			"google_drive_configured": true,
 			"client_email":            testSA.ClientEmail,
-			"warning":                 fmt.Sprintf("تم حفظ المفتاح، ولكن تعذر الوصول لمجلد درايف: %v. يرجى التأكد من تفعيل Google Drive API ومشاركة المجلد مع: %s", err, testSA.ClientEmail),
+			"warning":                 fmt.Sprintf("تم حفظ المفتاح، ولكن تعذر الوصول لمجلد درايف (%s): %v. يرجى التأكد من تفعيل Google Drive API ومشاركة المجلد مع: %s", gdrive.DriveRootFolder, err, testSA.ClientEmail),
 		}, nil)
 		return
 	}
+
+	_ = m.driveClient.EnsureFolderStructure()
 
 	response.JSON(w, http.StatusOK, "storage", "v1", map[string]interface{}{
 		"success":                 true,
 		"google_drive_configured": true,
 		"client_email":            testSA.ClientEmail,
 		"root_folder_id":          rootID,
-		"message":                 "تم ربط حساب Google Drive بنجاح! سيتم حفظ الصور والفيديوهات مباشرة على سحابتك الـ 5 تيرا وبدون أي حمل على السيرفر.",
+		"root_folder_name":        gdrive.DriveRootFolder,
+		"message":                 "تم ربط حساب Google Drive بنجاح! سيتم حفظ الصور والفيديوهات مباشرة داخل مجلد Elmansheya على سحابتك الـ 5 تيرا وبدون أي حمل على السيرفر.",
 	}, nil)
 }
 
-// handleUpload يستقبل الصورة أو الفيديو ويحفظه مباشرة على Google Drive (إذا توفرت بيانات الربط) أو في مجلد المنظومة
+func (m *Module) uploadToDriveOrFail(w http.ResponseWriter, section, ext, mimeType string, isVideo bool, data []byte) {
+	if !m.driveClient.IsConfigured() {
+		response.ModuleError(
+			w,
+			http.StatusServiceUnavailable,
+			"storage",
+			"DRIVE_UPLOAD_REQUIRED",
+			"حساب Google Drive غير مربوط حالياً؛ تم منع الحفظ على السيرفر. يرجى ربط مساحة الـ 5 تيرا أولاً.",
+		)
+		return
+	}
+
+	sectionFolder := ResolveSectionFolder(section)
+	mediaFolder := "صور"
+	if isVideo {
+		mediaFolder = "فيديوهات"
+	}
+
+	timestamp := time.Now().Format("20060102_150405")
+	cleanFilename := fmt.Sprintf("%s_%d%s", timestamp, time.Now().UnixNano()%1000, ext)
+
+	driveURL, fileID, driveErr := m.driveClient.UploadDirectToDrive(
+		sectionFolder,
+		mediaFolder,
+		cleanFilename,
+		data,
+		mimeType,
+	)
+	if driveErr != nil || driveURL == "" {
+		log.Printf("[Storage] Google Drive upload error (%s/%s): %v", sectionFolder, mediaFolder, driveErr)
+		response.ModuleError(
+			w,
+			http.StatusServiceUnavailable,
+			"storage",
+			"DRIVE_UPLOAD_REQUIRED",
+			fmt.Sprintf("تعذر رفع الملف إلى Google Drive (%s) ولم يتم حفظه على السيرفر: %v", gdrive.DriveRootFolder, driveErr),
+		)
+		return
+	}
+
+	response.JSON(w, http.StatusCreated, "storage", "v1", map[string]interface{}{
+		"url":           driveURL,
+		"drive_file_id": fileID,
+		"is_drive":      true,
+		"folder_path":   fmt.Sprintf("%s/%s/%s", gdrive.DriveRootFolder, sectionFolder, mediaFolder),
+		"filename":      cleanFilename,
+		"is_video":      isVideo,
+		"size_bytes":    len(data),
+		"server_saved":  false,
+	}, nil)
+}
+
+// handleUpload يستقبل الصورة أو الفيديو ويرفعه مباشرة على Google Drive فقط دون حفظه على السيرفر
 func (m *Module) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		response.ModuleError(w, http.StatusMethodNotAllowed, "storage", "METHOD_NOT_ALLOWED", "الطريقة غير مسموحة")
@@ -182,94 +258,30 @@ func (m *Module) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 		dataBytes, err := base64.StdEncoding.DecodeString(rawB64)
 		if err != nil {
-			response.ModuleError(w, http.StatusBadRequest, "storage", "INVALID_BASE64", "ترميز الصورة غير صالح")
+			response.ModuleError(w, http.StatusBadRequest, "storage", "INVALID_BASE64", "ترميز الملف غير صالح")
 			return
 		}
 
-		sectionFolder := "الأخبار_والتغطيات"
-		switch req.Section {
-		case "services":
-			sectionFolder = "الخدمات_والمرافق"
-		case "craftsmen":
-			sectionFolder = "الصنايعية_والحرفيين"
-		case "events":
-			sectionFolder = "المناسبات_والعزاء"
-		}
-
-		mediaFolder := "صور"
-		ext := ".jpg"
+		lowerName := strings.ToLower(req.Filename)
+		isVideo := req.MediaType == "video" || strings.HasSuffix(lowerName, ".mp4") || strings.HasSuffix(lowerName, ".mov") || strings.HasSuffix(lowerName, ".avi")
+		ext := strings.ToLower(filepath.Ext(req.Filename))
 		mimeType := "image/jpeg"
-		if req.MediaType == "video" || strings.HasSuffix(req.Filename, ".mp4") {
-			mediaFolder = "فيديوهات"
-			ext = ".mp4"
-			mimeType = "video/mp4"
-		}
-
-		timestamp := time.Now().Format("20060102_150405")
-		cleanFilename := fmt.Sprintf("%s_%d%s", timestamp, time.Now().UnixNano()%1000, ext)
-
-		// أ. إذا كان حساب Google Drive مربوطاً: الرفع المباشر إلى سحابة درايف 5 تيرا
-		if m.driveClient.IsConfigured() {
-			driveURL, fileID, driveErr := m.driveClient.UploadDirectToDrive(
-				sectionFolder,
-				mediaFolder,
-				cleanFilename,
-				dataBytes,
-				mimeType,
-			)
-			if driveErr == nil && driveURL != "" {
-				response.JSON(w, http.StatusCreated, "storage", "v1", map[string]interface{}{
-					"url":           driveURL,
-					"drive_file_id": fileID,
-					"is_drive":      true,
-					"folder_path":   fmt.Sprintf("Google_Drive/تطبيق_المنشية/%s/%s", sectionFolder, mediaFolder),
-					"filename":      cleanFilename,
-					"is_video":      req.MediaType == "video",
-					"size_bytes":    len(dataBytes),
-					"server_saved":  false,
-				}, nil)
-				return
+		if isVideo {
+			if ext == "" {
+				ext = ".mp4"
 			}
+			mimeType = "video/mp4"
+		} else if ext == "" {
+			ext = ".jpg"
 		}
 
-		// ب. في حال لم يتم إرفاق ملف المفاتيح بعد: الحفظ في هيكل مجلدات المنظومة مع تنبيه المشرف
-		targetDir := filepath.Join(m.baseDir, sectionFolder, mediaFolder)
-		_ = os.MkdirAll(targetDir, 0755)
-		dstPath := filepath.Join(targetDir, cleanFilename)
-
-		if err := os.WriteFile(dstPath, dataBytes, 0644); err != nil {
-			response.ModuleError(w, http.StatusInternalServerError, "storage", "SAVE_ERROR", "تعذر حفظ الملف")
-			return
-		}
-
-		host := r.Host
-		if host == "" || strings.HasPrefix(host, "localhost") || strings.HasPrefix(host, "127.0.0.1") {
-			host = "elmansheya.kerd2sy.com"
-		}
-		scheme := "https"
-		if r.Header.Get("X-Forwarded-Proto") == "http" && !strings.Contains(host, "elmansheya.kerd2sy.com") {
-			scheme = "http"
-		}
-
-		publicRelativePath := fmt.Sprintf("/uploads/Elmansheya_App/%s/%s/%s", sectionFolder, mediaFolder, cleanFilename)
-		publicURL := fmt.Sprintf("%s://%s%s", scheme, host, publicRelativePath)
-
-		response.JSON(w, http.StatusCreated, "storage", "v1", map[string]interface{}{
-			"url":          publicURL,
-			"relative_url": publicRelativePath,
-			"filename":     cleanFilename,
-			"folder_path":  fmt.Sprintf("تطبيق_المنشية/%s/%s", sectionFolder, mediaFolder),
-			"is_drive":     false,
-			"is_video":     req.MediaType == "video",
-			"size_bytes":   len(dataBytes),
-			"drive_notice": "تم الحفظ في مجلد المنظومة. لربط حساب درايف 5 تيرا المباشر، ضع مفتاح Google Cloud في data/google_drive_credentials.json",
-		}, nil)
+		m.uploadToDriveOrFail(w, req.Section, ext, mimeType, isVideo, dataBytes)
 		return
 	}
 
-	// ٢. دعم الرفع عبر Multipart Form-Data
-	if err := r.ParseMultipartForm(100 << 20); err != nil {
-		response.ModuleError(w, http.StatusBadRequest, "storage", "FILE_TOO_LARGE", "حجم الملف كبير جداً (الحد الأقصى 100 ميجا)")
+	// ٢. دعم الرفع عبر Multipart Form-Data (حتى 150 ميجابايت في الذاكرة المؤقتة قبل الدفع مباشرة إلى درايف)
+	if err := r.ParseMultipartForm(150 << 20); err != nil {
+		response.ModuleError(w, http.StatusBadRequest, "storage", "FILE_TOO_LARGE", "حجم الملف كبير جداً (الحد الأقصى 150 ميجا)")
 		return
 	}
 
@@ -283,18 +295,6 @@ func (m *Module) handleUpload(w http.ResponseWriter, r *http.Request) {
 	sectionParam := strings.TrimSpace(r.URL.Query().Get("section"))
 	if sectionParam == "" {
 		sectionParam = strings.TrimSpace(r.FormValue("section"))
-	}
-
-	var sectionFolder string
-	switch sectionParam {
-	case "services":
-		sectionFolder = "الخدمات_والمرافق"
-	case "craftsmen":
-		sectionFolder = "الصنايعية_والحرفيين"
-	case "events":
-		sectionFolder = "المناسبات_والعزاء"
-	default:
-		sectionFolder = "الأخبار_والتغطيات"
 	}
 
 	mediaTypeParam := strings.TrimSpace(r.URL.Query().Get("media_type"))
@@ -314,17 +314,10 @@ func (m *Module) handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	isVideo := strings.HasPrefix(fileContentType, "video/") || ext == ".mp4" || ext == ".mov" || ext == ".avi" || mediaTypeParam == "video"
-	var mediaFolder string
 	mimeType := "image/jpeg"
 	if isVideo {
-		mediaFolder = "فيديوهات"
 		mimeType = "video/mp4"
-	} else {
-		mediaFolder = "صور"
 	}
-
-	timestamp := time.Now().Format("20060102_150405")
-	cleanFilename := fmt.Sprintf("%s_%d%s", timestamp, time.Now().UnixNano()%1000, ext)
 
 	fileBytes, err := io.ReadAll(file)
 	if err != nil {
@@ -332,94 +325,23 @@ func (m *Module) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// الرفع المباشر لجوجل درايف إذا كانت الإعدادات متوفرة
-	if m.driveClient.IsConfigured() {
-		driveURL, fileID, driveErr := m.driveClient.UploadDirectToDrive(
-			sectionFolder,
-			mediaFolder,
-			cleanFilename,
-			fileBytes,
-			mimeType,
-		)
-		if driveErr == nil && driveURL != "" {
-			response.JSON(w, http.StatusCreated, "storage", "v1", map[string]interface{}{
-				"url":           driveURL,
-				"drive_file_id": fileID,
-				"is_drive":      true,
-				"folder_path":   fmt.Sprintf("Google_Drive/تطبيق_المنشية/%s/%s", sectionFolder, mediaFolder),
-				"filename":      cleanFilename,
-				"is_video":      isVideo,
-				"size_bytes":    len(fileBytes),
-				"server_saved":  false,
-			}, nil)
-			return
-		}
-	}
-
-	// بديل محلي لحين إرفاق المفاتيح
-	targetDir := filepath.Join(m.baseDir, sectionFolder, mediaFolder)
-	_ = os.MkdirAll(targetDir, 0755)
-	dstPath := filepath.Join(targetDir, cleanFilename)
-
-	if err := os.WriteFile(dstPath, fileBytes, 0644); err != nil {
-		response.ModuleError(w, http.StatusInternalServerError, "storage", "SAVE_ERROR", "تعذر حفظ الملف")
-		return
-	}
-
-	host := r.Host
-	if host == "" || strings.HasPrefix(host, "localhost") || strings.HasPrefix(host, "127.0.0.1") {
-		host = "elmansheya.kerd2sy.com"
-	}
-	scheme := "https"
-	if r.Header.Get("X-Forwarded-Proto") == "http" && !strings.Contains(host, "elmansheya.kerd2sy.com") {
-		scheme = "http"
-	}
-
-	publicRelativePath := fmt.Sprintf("/uploads/Elmansheya_App/%s/%s/%s", sectionFolder, mediaFolder, cleanFilename)
-	publicURL := fmt.Sprintf("%s://%s%s", scheme, host, publicRelativePath)
-
-	response.JSON(w, http.StatusCreated, "storage", "v1", map[string]interface{}{
-		"url":          publicURL,
-		"relative_url": publicRelativePath,
-		"filename":     cleanFilename,
-		"folder_path":  fmt.Sprintf("تطبيق_المنشية/%s/%s", sectionFolder, mediaFolder),
-		"is_drive":     false,
-		"is_video":     isVideo,
-		"size_bytes":   len(fileBytes),
-	}, nil)
+	m.uploadToDriveOrFail(w, sectionParam, ext, mimeType, isVideo, fileBytes)
 }
 
-// handleStructure يعرض شجرة المجلدات والإحصائيات
+// handleStructure يعرض شجرة المجلدات الرسمية على Google Drive
 func (m *Module) handleStructure(w http.ResponseWriter, r *http.Request) {
-	sections := []map[string]interface{}{
-		{
-			"id":          "news",
-			"name_ar":     "الأخبار والتغطيات",
-			"folder_path": "Elmansheya_App/الأخبار_والتغطيات",
-			"subfolders":  []string{"صور", "فيديوهات"},
-		},
-		{
-			"id":          "services",
-			"name_ar":     "الخدمات والمرافق",
-			"folder_path": "Elmansheya_App/الخدمات_والمرافق",
-			"subfolders":  []string{"صور", "فيديوهات"},
-		},
-		{
-			"id":          "craftsmen",
-			"name_ar":     "الصنايعية والحرفيين",
-			"folder_path": "Elmansheya_App/الصنايعية_والحرفيين",
-			"subfolders":  []string{"صور"},
-		},
-		{
-			"id":          "events",
-			"name_ar":     "المناسبات والعزاء",
-			"folder_path": "Elmansheya_App/المناسبات_والعزاء",
-			"subfolders":  []string{"صور", "فيديوهات"},
-		},
+	sections := make([]map[string]interface{}, 0, len(StorageSections))
+	for _, s := range StorageSections {
+		sections = append(sections, map[string]interface{}{
+			"id":          s.ID,
+			"name_ar":     s.NameAr,
+			"folder_path": fmt.Sprintf("%s/%s", gdrive.DriveRootFolder, s.FolderAr),
+			"subfolders":  gdrive.MediaSubfolders,
+		})
 	}
 
 	response.JSON(w, http.StatusOK, "storage", "v1", map[string]interface{}{
-		"app_root": "تطبيق_المنشية",
+		"app_root": gdrive.DriveRootFolder,
 		"sections": sections,
 	}, nil)
 }

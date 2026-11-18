@@ -40,6 +40,7 @@ def build_nginx_conf() -> str:
 
     gzip on;
     gzip_types application/json application/javascript;
+    client_max_body_size 150M;
 
     error_page 403 404 405 =200 /notfound.html;
 
@@ -47,6 +48,9 @@ def build_nginx_conf() -> str:
     location /api/ {{
         proxy_pass http://127.0.0.1:8080/api/;
 {PROXY_HEADERS}
+        client_max_body_size 150M;
+        proxy_read_timeout 180s;
+        proxy_send_timeout 180s;
         proxy_intercept_errors on;
         error_page 404 =200 /notfound.html;
     }}

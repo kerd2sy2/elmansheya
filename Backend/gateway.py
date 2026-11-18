@@ -1285,7 +1285,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
         upstream_resp_body, status, headers = self.forward_to_upstream('POST', body_bytes)
 
         # توليد إشعار تلقائي لجميع المواطنين عند إضافة أي عنصر جديد في أي قسم
-        if status in (200, 201) and body_bytes:
+        if status in (200, 201) and body_bytes and '/storage/upload' not in self.path:
             try:
                 req_json_notif = json.loads(body_bytes.decode('utf-8'))
                 resp_json_notif = json.loads(upstream_resp_body.decode('utf-8')) if upstream_resp_body else {}
@@ -1361,7 +1361,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 req.add_header(k, v)
 
         try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=180) as resp:
                 return resp.read(), resp.status, dict(resp.headers)
         except urllib.error.HTTPError as e:
             return e.read(), e.code, dict(e.headers)

@@ -35,6 +35,7 @@ import { SEED_TEN_REPORTS } from '../data/reports.mock';
 import { addMyReport } from '../storage/myReportsStorage';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { getCompositeDeviceFingerprint } from '@/core/security/deviceFingerprint';
+import { uploadMediaToDrive } from '@/core/storage/driveUpload';
 
 const NINE_REPORT_TYPES: {
   code: string;
@@ -260,12 +261,37 @@ export function ReportsScreen() {
     if (isSubmitting) return;
 
     setIsSubmitting(true);
-    const firstImageUrl = mediaList.find((m) => m.type === 'image')?.uri;
     const cleanTitle = title.trim();
     const cleanAddress = address.trim();
     const cleanDesc = description.trim() || 'تم إرسال البلاغ للمشرف المختص للمراجعة والمتابعة.';
     const userKey = user?.phone || user?.id || 'guest';
     const fingerprint = await getCompositeDeviceFingerprint().catch(() => '');
+
+    let uploadedMediaUrl: string | undefined;
+    if (mediaList.length > 0) {
+      try {
+        const uploadedUrls = await Promise.all(
+          mediaList.map((item) =>
+            uploadMediaToDrive({
+              uri: item.uri,
+              section: 'reports',
+              mediaType: item.type,
+              fileName: item.fileName,
+            })
+          )
+        );
+        const firstImageIdx = mediaList.findIndex((m) => m.type === 'image');
+        uploadedMediaUrl =
+          firstImageIdx >= 0 ? uploadedUrls[firstImageIdx] : uploadedUrls[0];
+      } catch (err: any) {
+        setIsSubmitting(false);
+        Alert.alert(
+          'تعذر رفع المرفق إلى Google Drive',
+          err?.message || 'تحقق من اتصال الإنترنت ثم أعد المحاولة.'
+        );
+        return;
+      }
+    }
 
     try {
       const res = await fetch(`${API_BASE_URL}/reports/create`, {
@@ -281,7 +307,7 @@ export function ReportsScreen() {
           title: cleanTitle,
           description: cleanDesc,
           manual_address: cleanAddress,
-          image_url: firstImageUrl || (mediaList.length > 0 ? mediaList[0].uri : undefined),
+          image_url: uploadedMediaUrl,
         }),
       });
 

@@ -157,7 +157,7 @@ export function NewsManagementScreen() {
         } else {
           setDriveVideoUrl(json.data.url);
         }
-        setSavedFolderNotice(json.data.folder_path || 'تطبيق_المنشية/الأخبار_والتغطيات');
+        setSavedFolderNotice(json.data.folder_path || 'Elmansheya/الأخبار_والتغطيات');
         
         if (json.data.is_drive) {
           Alert.alert(
