@@ -48,7 +48,7 @@ export function NewsHomeScreen() {
     useNewsFeed();
   const [showSearch, setShowSearch] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [visibleCount, setVisibleCount] = useState<number>(15);
+  const [visibleCount, setVisibleCount] = useState<number>(30);
   const [showNotificationsModal, setShowNotificationsModal] =
     useState<boolean>(false);
 
@@ -132,9 +132,16 @@ export function NewsHomeScreen() {
     });
   };
 
-  // معالجة التمرير بحسابات ناعمة تمنع التذبذب واللاج
+  // معالجة التمرير بحسابات ناعمة وتمرير لا نهائي تلقائي (30 ثم 30)
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const currentY = event.nativeEvent.contentOffset.y;
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const currentY = contentOffset.y;
+
+    // تمرير لا نهائي تلقائي (Infinite Scroll): تحميل 30 منشوراً تالياً فور الاقتراب من القاع
+    const isCloseToBottom = layoutMeasurement.height + currentY >= contentSize.height - 400;
+    if (isCloseToBottom && displayedNews.length > visibleCount) {
+      setVisibleCount((prev) => Math.min(prev + 30, displayedNews.length));
+    }
 
     // أ) إذا كان المستخدم في قمة الصفحة (<= 15px): أظهر الهيدر فوراً وتفادَ ارتداد iOS
     if (currentY <= 15) {
@@ -525,14 +532,12 @@ export function NewsHomeScreen() {
                 />
               ))}
               {displayedNews.length > visibleCount ? (
-                <Pressable
-                  style={styles.loadMoreBtn}
-                  onPress={() => setVisibleCount((prev) => prev + 15)}>
-                  <Text style={styles.loadMoreText}>
-                    عرض المزيد من أخبار القرية ({displayedNews.length - visibleCount})
+                <View style={styles.infiniteLoadingBox}>
+                  <ActivityIndicator size="small" color="#973c00" />
+                  <Text style={styles.infiniteLoadingText}>
+                    جاري تحميل أخبار القرية التالية تلقائياً...
                   </Text>
-                  <Ionicons name="chevron-down" size={16} color="#973c00" />
-                </Pressable>
+                </View>
               ) : null}
             </View>
           ) : null}
@@ -639,29 +644,18 @@ const styles = StyleSheet.create({
   smallNewsList: {
     gap: 12,
   },
-  loadMoreBtn: {
+  infiniteLoadingBox: {
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#FED7AA',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    marginTop: 8,
-    marginBottom: 16,
-    shadowColor: '#973c00',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    paddingVertical: 18,
+    marginBottom: 10,
   },
-  loadMoreText: {
-    color: '#973c00',
-    fontSize: 14,
-    fontWeight: '800',
+  infiniteLoadingText: {
+    fontSize: 12.5,
+    color: '#64748B',
+    fontWeight: '600',
   },
   headerRow: {
     flexDirection: rtlFlexDirection,

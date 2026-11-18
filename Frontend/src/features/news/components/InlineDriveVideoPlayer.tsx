@@ -67,9 +67,18 @@ function NativeExoPlayerView({
 }) {
   const { useVideoPlayer, VideoView } = ExpoVideoModule;
   const player = useVideoPlayer(streamUrl, (p: any) => {
-    p.loop = false;
+    p.loop = true;
     p.muted = false;
+    try {
+      p.play();
+    } catch {}
   });
+
+  useEffect(() => {
+    try {
+      player?.play();
+    } catch {}
+  }, [player]);
 
   return (
     <View style={[styles.container, { height }]}>
@@ -96,6 +105,9 @@ function EmbeddedWebViewPlayer({
 }) {
   const [loading, setLoading] = useState(true);
   const WebViewComponent = WebViewModule;
+  const targetUrl = previewUrl.includes('?')
+    ? `${previewUrl}&autoplay=1`
+    : `${previewUrl}?autoplay=1`;
 
   return (
     <View style={[styles.container, { height }]}>
@@ -106,7 +118,7 @@ function EmbeddedWebViewPlayer({
         </View>
       ) : null}
       <WebViewComponent
-        source={{ uri: previewUrl }}
+        source={{ uri: targetUrl }}
         style={[styles.webView, loading && { opacity: 0 }]}
         allowsFullscreenVideo={true}
         mediaPlaybackRequiresUserAction={false}

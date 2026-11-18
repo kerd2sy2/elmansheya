@@ -17,11 +17,14 @@ func NewHandler(service *Service) *Handler {
 
 func (h *Handler) GetFeed(w http.ResponseWriter, r *http.Request) {
 	cursor := r.URL.Query().Get("cursor")
-	feed, version, err := h.service.GetHomeFeed(r.Context(), cursor, 15)
+	feed, version, err := h.service.GetHomeFeed(r.Context(), cursor, 30)
 	if err != nil {
 		response.ModuleError(w, http.StatusServiceUnavailable, "news", ErrCodeNewsUnavailable, ErrMsgNewsUnavailableAr)
 		return
 	}
+
+	// كاش فائق السرعة لـ Cloudflare وسيرفرات الحافة: يخدم آلاف المواطنين في أجزاء من الثانية مع حماية تامة لقاعدة البيانات
+	w.Header().Set("Cache-Control", "public, max-age=30, s-maxage=300, stale-while-revalidate=600")
 
 	ifNoneMatch := r.Header.Get("If-None-Match")
 	if version != "" && ifNoneMatch != "" && (ifNoneMatch == version || ifNoneMatch == `"`+version+`"`) {

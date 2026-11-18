@@ -7,10 +7,6 @@ import { getDirectImageUrl, getDirectVideoUrl } from '@/core/utils/googleDrive';
 import { InlineDriveVideoPlayer } from '@/features/admin/components/InlineDriveVideoPlayer';
 import { NewsCardItem } from '../types/news.types';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
 interface SmallNewsCardProps {
   item: NewsCardItem;
   onPress?: (item: NewsCardItem) => void;

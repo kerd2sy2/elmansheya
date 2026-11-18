@@ -27,16 +27,11 @@ export async function isWifiConnection(): Promise<boolean> {
       return state?.type === wifiType;
     }
 
-    // بديل فحص المتصفح/الويب إن وُجد
-    const conn = (globalThis as any)?.navigator?.connection;
-    if (conn?.type) {
-      return conn.type === 'wifi';
-    }
-
-    // إذا كانت الوحدة غير مترجمة في APK الحالي، يتم افتراض false لتجنب تشغيل الفيديو تلقائياً على البيانات
-    return false;
+    // إذا لم تكن وحدة ExpoNetwork الأصلية مترجمة في ملف الـ APK الحالي،
+    // نعتمد الاتصال مفعل ومتاح للتشغيل التلقائي فوراً حتى يعمل الفيديو بسلاسة للمستخدم
+    return true;
   } catch {
-    return false;
+    return true;
   }
 }
 
