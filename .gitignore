@@ -1,0 +1,28 @@
+# Node & Expo
+Frontend/node_modules/
+Frontend/.expo/
+Frontend/dist/
+Frontend/.npm/
+Frontend - Admin/node_modules/
+Frontend - Admin/.expo/
+Frontend - Admin/dist/
+Frontend - Admin/.npm/
+
+# Go binaries & temporary files
+Backend/go-api/bin/
+Backend/go-api/*.exe
+Backend/go-api/server_linux
+Backend/go-api/tmp/
+
+# Sensitive deployment scripts with credentials
+deploy_*.py
+setup_*.py
+*.bat
+*.mp4
+
+# Agent and OS
+.agent/
+.gemini/
+.DS_Store
+Thumbs.db
+*.log

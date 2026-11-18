@@ -1,0 +1,436 @@
+{
+  "accounts": {
+    "01011112222": {
+      "ID": "usr-1794183185750809700",
+      "FullName": "Test User",
+      "Phone": "01011112222",
+      "PasswordHash": "pbkdf2_sha256$15000$/tz4YaXCG/i1RyO1ZpSmvA$H9tQeH15DiWgfdJEioyFsb9wKZ5j34MSzADIPA8Fkr4",
+      "Area": "???????",
+      "Role": "citizen",
+      "RoleNameAr": "المواطن",
+      "VerificationStatus": "unverified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-09T03:13:05.7508097+03:00"
+    },
+    "01011113333": {
+      "ID": "usr-1794882948834929900",
+      "FullName": "تجربة مواطن",
+      "Phone": "01011113333",
+      "PasswordHash": "pbkdf2_sha256$15000$INE0L3gFDe6anLdu194WKQ$dB9Nw4lIdySdRrkpG3HF1cHSWMVxMmabz49FDqCYddU",
+      "Area": "المنشية",
+      "Role": "citizen",
+      "RoleNameAr": "المواطن",
+      "VerificationStatus": "unverified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-17T05:35:48.8349299+03:00"
+    },
+    "01099887766": {
+      "ID": "usr-1794880803441267200",
+      "FullName": "????? ?????? ???",
+      "Phone": "01099887766",
+      "PasswordHash": "pbkdf2_sha256$15000$1tC6s8dFYQ8YVG+UEL8vQg$G0+vv1WPXsciDhXHY1H3KG+mumGaKU0nuYvb+8Lj9+E",
+      "Area": "???????",
+      "Role": "citizen",
+      "RoleNameAr": "المواطن",
+      "VerificationStatus": "unverified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-17T05:00:03.4412672+03:00",
+      "BoundDeviceFingerprint": "test_wa_device"
+    },
+    "01525525552": {
+      "ID": "usr-1794365578747465900",
+      "FullName": "عاومنما",
+      "Phone": "01525525552",
+      "PasswordHash": "pbkdf2_sha256$15000$r7gp0C5ujoJWUWUMaNncoA$EojHSR81xG64NyxDxNU9nzMe3G+rf0ysEuhX9Cxf364",
+      "Area": "المنشية",
+      "Role": "citizen",
+      "RoleNameAr": "المواطن",
+      "VerificationStatus": "unverified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-11T05:52:58.7474659+03:00"
+    },
+    "01550888841": {
+      "ID": "usr-1794183401359535600",
+      "FullName": "إبراهيم (المشرف العام)",
+      "Phone": "01550888841",
+      "PasswordHash": "pbkdf2_sha256$15000$pwQtdkd1wxO9cFVKbJ/1/g$QpnA/u0Cv8g07+RVXqAF8z0jrGelAH7BvapPOgcgzuI",
+      "Area": "٠",
+      "Role": "super_admin",
+      "RoleNameAr": "المشرف العام",
+      "VerificationStatus": "verified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-09T03:16:41.3595356+03:00"
+    },
+    "0155555555": {
+      "ID": "usr-1794881548348003300",
+      "FullName": "هيما",
+      "Phone": "0155555555",
+      "PasswordHash": "pbkdf2_sha256$15000$7z0JFJaGn5EcCsbkyvHdIA$AKJrSPTOjnUS/3dkKcKr184synYFO4VQPkfid8Jg0CY",
+      "Area": "المنشية",
+      "Role": "citizen",
+      "RoleNameAr": "المواطن",
+      "VerificationStatus": "unverified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-17T05:12:28.3480033+03:00"
+    },
+    "01555555858": {
+      "ID": "usr-1794878032436239900",
+      "FullName": "ابراهيم",
+      "Phone": "01555555858",
+      "PasswordHash": "pbkdf2_sha256$15000$D0t5lSHIfOGh7VT78o0vOg$GZGPMiptvWs2uQurAEfKeeWSJ2beT2BdSvtdz/xZOvU",
+      "Area": "المنشية",
+      "Role": "citizen",
+      "RoleNameAr": "المواطن",
+      "VerificationStatus": "unverified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-17T04:13:52.4362399+03:00"
+    },
+    "0500626432": {
+      "ID": "usr-super-admin-0500626432",
+      "FullName": "المدير العام (المشرف العام)",
+      "Phone": "0500626432",
+      "PasswordHash": "pbkdf2_sha256$15000$ORbcybbLW4yp+ci+cAD4Ww$61crEdtb3PYA7liFPXAfHzCRkU1dMBys6DRrQ8sjpAw",
+      "Area": "المنشية - الإدارة المركزية",
+      "Role": "super_admin",
+      "RoleNameAr": "المشرف العام",
+      "VerificationStatus": "verified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-10T01:28:00+03:00"
+    }
+  },
+  "by_id": {
+    "usr-1794183185750809700": {
+      "ID": "usr-1794183185750809700",
+      "FullName": "Test User",
+      "Phone": "01011112222",
+      "PasswordHash": "pbkdf2_sha256$15000$/tz4YaXCG/i1RyO1ZpSmvA$H9tQeH15DiWgfdJEioyFsb9wKZ5j34MSzADIPA8Fkr4",
+      "Area": "???????",
+      "Role": "citizen",
+      "RoleNameAr": "المواطن",
+      "VerificationStatus": "unverified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-09T03:13:05.7508097+03:00"
+    },
+    "usr-1794183401359535600": {
+      "ID": "usr-1794183401359535600",
+      "FullName": "إبراهيم (المشرف العام)",
+      "Phone": "01550888841",
+      "PasswordHash": "pbkdf2_sha256$15000$pwQtdkd1wxO9cFVKbJ/1/g$QpnA/u0Cv8g07+RVXqAF8z0jrGelAH7BvapPOgcgzuI",
+      "Area": "٠",
+      "Role": "super_admin",
+      "RoleNameAr": "المشرف العام",
+      "VerificationStatus": "verified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-09T03:16:41.3595356+03:00"
+    },
+    "usr-1794365578747465900": {
+      "ID": "usr-1794365578747465900",
+      "FullName": "عاومنما",
+      "Phone": "01525525552",
+      "PasswordHash": "pbkdf2_sha256$15000$r7gp0C5ujoJWUWUMaNncoA$EojHSR81xG64NyxDxNU9nzMe3G+rf0ysEuhX9Cxf364",
+      "Area": "المنشية",
+      "Role": "citizen",
+      "RoleNameAr": "المواطن",
+      "VerificationStatus": "unverified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-11T05:52:58.7474659+03:00"
+    },
+    "usr-1794878032436239900": {
+      "ID": "usr-1794878032436239900",
+      "FullName": "ابراهيم",
+      "Phone": "01555555858",
+      "PasswordHash": "pbkdf2_sha256$15000$D0t5lSHIfOGh7VT78o0vOg$GZGPMiptvWs2uQurAEfKeeWSJ2beT2BdSvtdz/xZOvU",
+      "Area": "المنشية",
+      "Role": "citizen",
+      "RoleNameAr": "المواطن",
+      "VerificationStatus": "unverified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-17T04:13:52.4362399+03:00"
+    },
+    "usr-1794880803441267200": {
+      "ID": "usr-1794880803441267200",
+      "FullName": "????? ?????? ???",
+      "Phone": "01099887766",
+      "PasswordHash": "pbkdf2_sha256$15000$1tC6s8dFYQ8YVG+UEL8vQg$G0+vv1WPXsciDhXHY1H3KG+mumGaKU0nuYvb+8Lj9+E",
+      "Area": "???????",
+      "Role": "citizen",
+      "RoleNameAr": "المواطن",
+      "VerificationStatus": "unverified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-17T05:00:03.4412672+03:00"
+    },
+    "usr-1794881548348003300": {
+      "ID": "usr-1794881548348003300",
+      "FullName": "هيما",
+      "Phone": "0155555555",
+      "PasswordHash": "pbkdf2_sha256$15000$7z0JFJaGn5EcCsbkyvHdIA$AKJrSPTOjnUS/3dkKcKr184synYFO4VQPkfid8Jg0CY",
+      "Area": "المنشية",
+      "Role": "citizen",
+      "RoleNameAr": "المواطن",
+      "VerificationStatus": "unverified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-17T05:12:28.3480033+03:00"
+    },
+    "usr-1794882948834929900": {
+      "ID": "usr-1794882948834929900",
+      "FullName": "تجربة مواطن",
+      "Phone": "01011113333",
+      "PasswordHash": "pbkdf2_sha256$15000$INE0L3gFDe6anLdu194WKQ$dB9Nw4lIdySdRrkpG3HF1cHSWMVxMmabz49FDqCYddU",
+      "Area": "المنشية",
+      "Role": "citizen",
+      "RoleNameAr": "المواطن",
+      "VerificationStatus": "unverified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-17T05:35:48.8349299+03:00"
+    },
+    "usr-super-admin-0500626432": {
+      "ID": "usr-super-admin-0500626432",
+      "FullName": "المدير العام (المشرف العام)",
+      "Phone": "0500626432",
+      "PasswordHash": "pbkdf2_sha256$15000$ORbcybbLW4yp+ci+cAD4Ww$61crEdtb3PYA7liFPXAfHzCRkU1dMBys6DRrQ8sjpAw",
+      "Area": "المنشية - الإدارة المركزية",
+      "Role": "super_admin",
+      "RoleNameAr": "المشرف العام",
+      "VerificationStatus": "verified",
+      "BiometricEnabled": false,
+      "CreatedAt": "2026-11-10T01:28:00+03:00"
+    }
+  },
+  "sessions": {
+    "sess-usr-1794183185750809700-1794183185752279700": {
+      "SessionID": "sess-usr-1794183185750809700-1794183185752279700",
+      "UserID": "usr-1794183185750809700",
+      "RefreshTokenHash": "9e71c5478adc3e6aa7212f3202c546d0a5fea280474912a260bf46bdb9394c92",
+      "BiometricBound": false,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-16T03:13:05.7522797+03:00"
+    },
+    "sess-usr-1794183401359535600-1794183401361268600": {
+      "SessionID": "sess-usr-1794183401359535600-1794183401361268600",
+      "UserID": "usr-1794183401359535600",
+      "RefreshTokenHash": "ce373d3468897ac4db61fe1edf2463c86dc1ba5f52b9955562fd8d4d02208c3c",
+      "BiometricBound": false,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-16T03:16:41.3612686+03:00"
+    },
+    "sess-usr-1794183401359535600-1794183592858979400": {
+      "SessionID": "sess-usr-1794183401359535600-1794183592858979400",
+      "UserID": "usr-1794183401359535600",
+      "RefreshTokenHash": "a60dbb0b953d2b68669b09468b9d1ccb840c003387cc65915fad41625263d565",
+      "BiometricBound": true,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-16T03:19:52.8589794+03:00"
+    },
+    "sess-usr-1794183401359535600-1794185113132713400": {
+      "SessionID": "sess-usr-1794183401359535600-1794185113132713400",
+      "UserID": "usr-1794183401359535600",
+      "RefreshTokenHash": "9d037d6a91afed4829c56a60f03e3db4f0031e414f2186188a28cfe3a4118cfb",
+      "BiometricBound": true,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-16T03:45:13.1327134+03:00"
+    },
+    "sess-usr-1794183401359535600-1794186126441652600": {
+      "SessionID": "sess-usr-1794183401359535600-1794186126441652600",
+      "UserID": "usr-1794183401359535600",
+      "RefreshTokenHash": "285d6c37632ee4fccfeaf94c7609259b95071a85a9d70160d02bc901efc4f546",
+      "BiometricBound": true,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-16T04:02:06.4416526+03:00"
+    },
+    "sess-usr-1794183401359535600-1794196194352062800": {
+      "SessionID": "sess-usr-1794183401359535600-1794196194352062800",
+      "UserID": "usr-1794183401359535600",
+      "RefreshTokenHash": "950a7c20ae6dd4ab17fe01dcf444c0bb02429a385dcf08566654bd6ba505f8f4",
+      "BiometricBound": true,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-16T07:51:09.4641615+03:00"
+    },
+    "sess-usr-1794183401359535600-1794200577889265900": {
+      "SessionID": "sess-usr-1794183401359535600-1794200577889265900",
+      "UserID": "usr-1794183401359535600",
+      "RefreshTokenHash": "c3815e8330e551d16fc33301c338705c93e929ef18d187d8cc05e3977193058e",
+      "BiometricBound": true,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-16T08:47:14.5377836+03:00"
+    },
+    "sess-usr-1794183401359535600-1794238153432856600": {
+      "SessionID": "sess-usr-1794183401359535600-1794238153432856600",
+      "UserID": "usr-1794183401359535600",
+      "RefreshTokenHash": "7e0105a2fcaa23416c2653720b63bc100165cd70cc1692da5af2a3f5aafeed41",
+      "BiometricBound": true,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-16T18:29:13.4328566+03:00"
+    },
+    "sess-usr-1794183401359535600-1794255196376714900": {
+      "SessionID": "sess-usr-1794183401359535600-1794255196376714900",
+      "UserID": "usr-1794183401359535600",
+      "RefreshTokenHash": "98a1c07b671cc21f73d3d1a325049259986799cd3050ca16e71c493f89fd5609",
+      "BiometricBound": true,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-16T23:13:16.3767149+03:00"
+    },
+    "sess-usr-1794183401359535600-1794938168419918100": {
+      "SessionID": "sess-usr-1794183401359535600-1794938168419918100",
+      "UserID": "usr-1794183401359535600",
+      "RefreshTokenHash": "0ccbed7916a48c235213779d4a881308700bdef3a4a0a6387232023f2abdba56",
+      "BiometricBound": true,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-24T20:57:39.4194652+03:00"
+    },
+    "sess-usr-1794183401359535600-1794938379942537400": {
+      "SessionID": "sess-usr-1794183401359535600-1794938379942537400",
+      "UserID": "usr-1794183401359535600",
+      "RefreshTokenHash": "a848f44e3f319ad84866a387abd43b651ce7b24251c8389f967b8473d6375a29",
+      "BiometricBound": true,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-24T20:59:39.9425374+03:00"
+    },
+    "sess-usr-1794183401359535600-1794944629400117300": {
+      "SessionID": "sess-usr-1794183401359535600-1794944629400117300",
+      "UserID": "usr-1794183401359535600",
+      "RefreshTokenHash": "c0f0e819e5af2b004eda7bcdba0fc0acd6b1d85cff8a3dc6e0071ee5eab52b25",
+      "BiometricBound": true,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-24T22:43:49.4001173+03:00"
+    },
+    "sess-usr-1794183401359535600-1794945341085614300": {
+      "SessionID": "sess-usr-1794183401359535600-1794945341085614300",
+      "UserID": "usr-1794183401359535600",
+      "RefreshTokenHash": "cd68fd1c2e0db6f3cb2d9998659e5b506c207647247b1c92e0eaac35ae7f70ad",
+      "BiometricBound": true,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-24T22:55:41.0856143+03:00"
+    },
+    "sess-usr-1794183401359535600-1794951072664363700": {
+      "SessionID": "sess-usr-1794183401359535600-1794951072664363700",
+      "UserID": "usr-1794183401359535600",
+      "RefreshTokenHash": "16afb1435cacee87f0a95e0931ee188e4f2cccc951ed05ecf4c49400f2227561",
+      "BiometricBound": true,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-25T00:31:12.6643637+03:00"
+    },
+    "sess-usr-1794365578747465900-1794365578749515400": {
+      "SessionID": "sess-usr-1794365578747465900-1794365578749515400",
+      "UserID": "usr-1794365578747465900",
+      "RefreshTokenHash": "6e7be904977b5f3580be4d51298ecd1ac279abedd01d760936a9277c75714815",
+      "BiometricBound": false,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-18T05:52:58.7495154+03:00"
+    },
+    "sess-usr-1794878032436239900-1794878032437536900": {
+      "SessionID": "sess-usr-1794878032436239900-1794878032437536900",
+      "UserID": "usr-1794878032436239900",
+      "RefreshTokenHash": "df3d6bb25c0f976c5363a8cc8fbee91242dce34b8adb62e921a673c207db3198",
+      "BiometricBound": false,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-24T04:13:52.4375369+03:00"
+    },
+    "sess-usr-1794880803441267200-1794880803443503700": {
+      "SessionID": "sess-usr-1794880803441267200-1794880803443503700",
+      "UserID": "usr-1794880803441267200",
+      "RefreshTokenHash": "d01e33dc082f4e1b559162b3ac47c5bb8c996e4e13d24d573559195830e1398d",
+      "BiometricBound": false,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-24T05:00:03.4435037+03:00"
+    },
+    "sess-usr-1794880803441267200-1794881389768598300": {
+      "SessionID": "sess-usr-1794880803441267200-1794881389768598300",
+      "UserID": "usr-1794880803441267200",
+      "RefreshTokenHash": "256a56b47bdc166b57978b2d79f42c14904822daaad6c5ba6c1c1e44fcccf4c7",
+      "BiometricBound": false,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-24T05:09:49.7685983+03:00"
+    },
+    "sess-usr-1794881548348003300-1794881548349247600": {
+      "SessionID": "sess-usr-1794881548348003300-1794881548349247600",
+      "UserID": "usr-1794881548348003300",
+      "RefreshTokenHash": "010972ad91dbaec4df2e5a5d111952edbee29becbac40eaf4d17c583da1e7aa5",
+      "BiometricBound": false,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-24T05:12:28.3492476+03:00"
+    },
+    "sess-usr-1794881548348003300-1794881585580375900": {
+      "SessionID": "sess-usr-1794881548348003300-1794881585580375900",
+      "UserID": "usr-1794881548348003300",
+      "RefreshTokenHash": "bb936d8744c80858d16a0f2abe4cafee4bb647d68bbe3c14acb4cc8f05536cf8",
+      "BiometricBound": true,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-24T05:13:41.0152327+03:00"
+    },
+    "sess-usr-1794881548348003300-1794881831991864300": {
+      "SessionID": "sess-usr-1794881548348003300-1794881831991864300",
+      "UserID": "usr-1794881548348003300",
+      "RefreshTokenHash": "3098a7d45785df03bf86420f0f34ac827843cf99fea32afa458bc9f960b03e59",
+      "BiometricBound": true,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-24T05:17:11.9918643+03:00"
+    },
+    "sess-usr-1794882948834929900-1794882948837446400": {
+      "SessionID": "sess-usr-1794882948834929900-1794882948837446400",
+      "UserID": "usr-1794882948834929900",
+      "RefreshTokenHash": "98aa4daf47ea33afa7d3080dfc30356caa7dc40979b05074b3b031f9b6c391fc",
+      "BiometricBound": false,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-24T05:35:48.8374464+03:00"
+    },
+    "sess-usr-super-admin-0500626432-1794263319985539200": {
+      "SessionID": "sess-usr-super-admin-0500626432-1794263319985539200",
+      "UserID": "usr-super-admin-0500626432",
+      "RefreshTokenHash": "f0cabe32e7563c03b17d7ace7abfcaa5c3cbb4e5168a0d352eaff3c47b516668",
+      "BiometricBound": false,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-17T01:28:39.9855392+03:00"
+    },
+    "sess-usr-super-admin-0500626432-1794263323779990400": {
+      "SessionID": "sess-usr-super-admin-0500626432-1794263323779990400",
+      "UserID": "usr-super-admin-0500626432",
+      "RefreshTokenHash": "488b9efe68446c6fda0a275fd89bd9a9ae129075d98a148c5aaf6f0b0c655cff",
+      "BiometricBound": false,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-17T01:28:43.7799904+03:00"
+    },
+    "sess-usr-super-admin-0500626432-1794263683050822000": {
+      "SessionID": "sess-usr-super-admin-0500626432-1794263683050822000",
+      "UserID": "usr-super-admin-0500626432",
+      "RefreshTokenHash": "3ceabe227a0dcc47216e8d6a6bee7196c28fe800ecea8c79fa2ef49717177241",
+      "BiometricBound": true,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-17T01:34:43.050822+03:00"
+    },
+    "sess-usr-super-admin-0500626432-1794264322426105500": {
+      "SessionID": "sess-usr-super-admin-0500626432-1794264322426105500",
+      "UserID": "usr-super-admin-0500626432",
+      "RefreshTokenHash": "65c31c209d2d263bb655cf71c7f16974f92c5a5061b07b895e115e3c47f14067",
+      "BiometricBound": false,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-17T01:45:22.4261055+03:00"
+    },
+    "sess-usr-super-admin-0500626432-1794264338547868500": {
+      "SessionID": "sess-usr-super-admin-0500626432-1794264338547868500",
+      "UserID": "usr-super-admin-0500626432",
+      "RefreshTokenHash": "718b1ac00c25f86376190701bbfffcdc67ef21725aee051a47001d1d5ccd483c",
+      "BiometricBound": false,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-17T01:45:38.5478685+03:00"
+    },
+    "sess-usr-super-admin-0500626432-1794264919067824100": {
+      "SessionID": "sess-usr-super-admin-0500626432-1794264919067824100",
+      "UserID": "usr-super-admin-0500626432",
+      "RefreshTokenHash": "34e3b249b9d016f1614be4f97a9b5a08c2db2ade4f89bbeda8e187b11583f9c4",
+      "BiometricBound": false,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-17T01:55:19.0678241+03:00"
+    },
+    "sess-usr-super-admin-0500626432-1794264924897339100": {
+      "SessionID": "sess-usr-super-admin-0500626432-1794264924897339100",
+      "UserID": "usr-super-admin-0500626432",
+      "RefreshTokenHash": "4797937a9bc9a0a8b6edcaef985c19224e19bf61e314c9afe69e275fd3fb888f",
+      "BiometricBound": false,
+      "Revoked": false,
+      "ExpiresAt": "2026-11-17T01:55:24.8973391+03:00"
+    }
+  },
+  "device_to_user": {
+    "test_wa_device": "usr-1794880803441267200"
+  }
+}

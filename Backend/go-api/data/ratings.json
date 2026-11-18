@@ -1,0 +1,57 @@
+[
+  {
+    "id": "rat-1794880839565842800",
+    "craftsman_id": "crf-1",
+    "craftsman_name": "",
+    "stars": 1,
+    "comment": "تعديل التقييم لنفس الصنايعي من نفس الجهاز",
+    "user_name": "مواطن تجريبي",
+    "user_phone": "01099887766",
+    "device_fingerprint": "DEV-TEST-PHONE-FINGERPRINT-AAA",
+    "updated_at": "2026-11-17T05:00:39.568558+03:00"
+  },
+  {
+    "id": "rat-1794872963564831000",
+    "craftsman_id": "craftsman-104",
+    "craftsman_name": "",
+    "stars": 5,
+    "comment": "هلا",
+    "user_name": "عاومنما",
+    "user_phone": "01525525552",
+    "device_fingerprint": "",
+    "updated_at": "2026-11-17T02:49:23.564831+03:00"
+  },
+  {
+    "id": "rat-101-1",
+    "craftsman_id": "craftsman-101",
+    "craftsman_name": "الأسطى إبراهيم الحداد",
+    "stars": 5,
+    "comment": "راجل محترم وأمين جداً وشغله في التأسيس نظيف ومتقن وخلص في الموعد المحدد بالضبط.",
+    "user_name": "الحاج محمود عبد الله",
+    "user_phone": "01001234567",
+    "device_fingerprint": "",
+    "updated_at": "2026-11-15T14:30:00+03:00"
+  },
+  {
+    "id": "rat-101-2",
+    "craftsman_id": "craftsman-101",
+    "craftsman_name": "الأسطى إبراهيم الحداد",
+    "stars": 5,
+    "comment": "تسلم إيده، غير لوحة الكهرباء بالكامل ورتب الأسلاك بدون أي تكسير زيادة.",
+    "user_name": "أحمد عبد الفتاح",
+    "user_phone": "01122334455",
+    "device_fingerprint": "",
+    "updated_at": "2026-11-16T18:20:00+03:00"
+  },
+  {
+    "id": "rat-105-1",
+    "craftsman_id": "craftsman-105",
+    "craftsman_name": "الأسطى جمال العمدة",
+    "stars": 5,
+    "comment": "شغل سباكة ممتاز وعزل الحمام على أعلى مستوى، أسعاره عادلة ومعاملته طيبة.",
+    "user_name": "سيد مبروك",
+    "user_phone": "01234567890",
+    "device_fingerprint": "",
+    "updated_at": "2026-11-14T11:00:00+03:00"
+  }
+]
