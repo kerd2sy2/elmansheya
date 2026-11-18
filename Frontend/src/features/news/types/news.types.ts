@@ -19,6 +19,7 @@ export interface NewsCardItem {
   is_featured: boolean;
   is_pinned: boolean;
   has_long_text: boolean;
+  aspect_ratio?: number;
 }
 
 export interface NewsFeedPayload {

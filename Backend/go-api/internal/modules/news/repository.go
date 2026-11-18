@@ -100,6 +100,7 @@ func (r *diskRepository) PublishNews(ctx context.Context, req PublishNewsRequest
 		IsFeatured:        req.IsPinnedFeatured,
 		IsPinned:          req.IsPinnedFeatured,
 		HasLongText:       len(req.Summary) > 80,
+		AspectRatio:       req.AspectRatio,
 	}
 
 	if req.IsPinnedFeatured {

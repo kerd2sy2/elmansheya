@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
   I18nManager,
+  Image as RNImage,
   Platform,
   Pressable,
   StyleSheet,
@@ -24,6 +25,10 @@ import {
   shouldAutoPlayVideoNow,
   subscribeToAutoPlaySetting,
 } from '@/core/storage/videoSettingsStorage';
+import {
+  getCachedAspectRatio,
+  setCachedAspectRatio,
+} from '../utils/mediaAspectRatioCache';
 
 // فحص وجود وحدة الفيديو الأصلية في نسخة التطبيق المترجمة (ExoPlayer Native)
 const hasNativeExpoVideo = Boolean(requireOptionalNativeModule('ExpoVideo'));
@@ -55,6 +60,8 @@ interface InlineDriveVideoPlayerProps {
   coverImageUrl?: string | null;
   height?: number;
   isActive?: boolean;
+  initialAspectRatio?: number;
+  cacheKey?: string;
 }
 
 /**
@@ -70,6 +77,7 @@ function NativeExoPlayerView({
   autoPlayAllowed,
   aspectRatio,
   onAspectRatioChange,
+  cacheKey,
 }: {
   streamUrl: string;
   effectiveCoverUrl?: string | null;
@@ -78,6 +86,7 @@ function NativeExoPlayerView({
   autoPlayAllowed: boolean;
   aspectRatio: number;
   onAspectRatioChange?: (ratio: number) => void;
+  cacheKey?: string;
 }) {
   const videoViewRef = useRef<any>(null);
   const { useVideoPlayer, VideoView } = ExpoVideoModule;
@@ -103,6 +112,25 @@ function NativeExoPlayerView({
     p.muted = true;
   });
 
+  const handleTrackDimension = useCallback(
+    (width: number, height: number) => {
+      if (width > 0 && height > 0) {
+        const ratio = width / height;
+        const clamped = Math.max(0.68, Math.min(ratio, 2.2));
+        if (cacheKey) setCachedAspectRatio(cacheKey, clamped);
+        setCachedAspectRatio(streamUrl, clamped);
+        if (effectiveCoverUrl) setCachedAspectRatio(effectiveCoverUrl, clamped);
+
+        // أهم نقطة لمنع اللاج والقفزات:
+        // إذا كانت الأبعاد الحالية قريبة من النسبة الطبيعية (الفرق أقل من 0.05)، لا نغير أي شيء في الـ layout نهائياً!
+        if (Math.abs(aspectRatio - clamped) > 0.05) {
+          onAspectRatioChange?.(clamped);
+        }
+      }
+    },
+    [aspectRatio, cacheKey, streamUrl, effectiveCoverUrl, onAspectRatioChange]
+  );
+
   useEffect(() => {
     if (!player) return;
     const subPlaying = player.addListener?.('playingChange', (ev: any) => {
@@ -113,19 +141,15 @@ function NativeExoPlayerView({
     });
     const subTrack = player.addListener?.('videoTrackChange', (ev: any) => {
       const size = ev.videoTrack?.size;
-      if (size?.width && size?.height && size.height > 0) {
-        const ratio = size.width / size.height;
-        const clamped = Math.max(0.68, Math.min(ratio, 2.2));
-        onAspectRatioChange?.(clamped);
+      if (size?.width && size?.height) {
+        handleTrackDimension(size.width, size.height);
       }
     });
     const subSource = player.addListener?.('sourceLoad', (ev: any) => {
       const track = ev.availableVideoTracks?.[0];
       const size = track?.size;
-      if (size?.width && size?.height && size.height > 0) {
-        const ratio = size.width / size.height;
-        const clamped = Math.max(0.68, Math.min(ratio, 2.2));
-        onAspectRatioChange?.(clamped);
+      if (size?.width && size?.height) {
+        handleTrackDimension(size.width, size.height);
       }
     });
 
@@ -135,7 +159,7 @@ function NativeExoPlayerView({
       subTrack?.remove();
       subSource?.remove();
     };
-  }, [player, onAspectRatioChange]);
+  }, [player, handleTrackDimension]);
 
   // إدارة التشغيل التلقائي عند التمرير:
   // - يشتغل فقط عندما يصبح الفيديو في منتصف الشاشة (isActive=true)
@@ -318,17 +342,61 @@ export function InlineDriveVideoPlayer({
   coverImageUrl,
   height,
   isActive = false,
+  initialAspectRatio,
+  cacheKey,
 }: InlineDriveVideoPlayerProps) {
   const [autoPlayAllowed, setAutoPlayAllowed] = useState<boolean>(true);
   const [userExplicitPlay, setUserExplicitPlay] = useState<boolean>(false);
-  const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
-  const [hasBeenMounted, setHasBeenMounted] = useState<boolean>(false);
 
   const fileId = extractGoogleDriveFileId(videoUrl);
   const directStreamUrl = getDirectVideoUrl(videoUrl);
   const previewUrl = getGoogleDrivePreviewUrl(videoUrl);
   const effectiveCoverUrl =
     coverImageUrl || getGoogleDriveThumbnailUrl(videoUrl);
+
+  const resolvedInitialRatio =
+    initialAspectRatio ||
+    getCachedAspectRatio([cacheKey, videoUrl, effectiveCoverUrl]) ||
+    16 / 9;
+
+  const [aspectRatio, setAspectRatio] = useState<number>(resolvedInitialRatio);
+  const [hasBeenMounted, setHasBeenMounted] = useState<boolean>(false);
+
+  // تحديث النسبة فور وصول أبعاد أدق من الكارت الأب أو الكاش
+  useEffect(() => {
+    if (initialAspectRatio && Math.abs(initialAspectRatio - aspectRatio) > 0.05) {
+      setAspectRatio(initialAspectRatio);
+    }
+  }, [initialAspectRatio, aspectRatio]);
+
+  // فحص وقياس أبعاد صورة الغلاف/الثامبنيل فورياً في الخلفية لضبط حجم الكارت مسبقاً قبل بدء الفيديو
+  useEffect(() => {
+    if (!effectiveCoverUrl) return;
+    const existing = getCachedAspectRatio([cacheKey, videoUrl, effectiveCoverUrl]);
+    if (existing) {
+      if (Math.abs(existing - aspectRatio) > 0.05) {
+        setAspectRatio(existing);
+      }
+      return;
+    }
+
+    RNImage.getSize(
+      effectiveCoverUrl,
+      (w, h) => {
+        if (w > 0 && h > 0) {
+          const ratio = w / h;
+          const clamped = Math.max(0.68, Math.min(ratio, 2.2));
+          if (cacheKey) setCachedAspectRatio(cacheKey, clamped);
+          setCachedAspectRatio(effectiveCoverUrl, clamped);
+          setCachedAspectRatio(videoUrl, clamped);
+          if (Math.abs(aspectRatio - clamped) > 0.05) {
+            setAspectRatio(clamped);
+          }
+        }
+      },
+      () => {}
+    );
+  }, [effectiveCoverUrl, cacheKey, videoUrl, aspectRatio]);
 
   const containerDimension = height
     ? { height }
@@ -396,7 +464,12 @@ export function InlineDriveVideoPlayer({
               if (width && imgHeight && imgHeight > 0) {
                 const ratio = width / imgHeight;
                 const clamped = Math.max(0.68, Math.min(ratio, 2.2));
-                setAspectRatio(clamped);
+                if (cacheKey) setCachedAspectRatio(cacheKey, clamped);
+                setCachedAspectRatio(effectiveCoverUrl, clamped);
+                setCachedAspectRatio(videoUrl, clamped);
+                if (Math.abs(aspectRatio - clamped) > 0.05) {
+                  setAspectRatio(clamped);
+                }
               }
             }}
           />
@@ -431,6 +504,7 @@ export function InlineDriveVideoPlayer({
         autoPlayAllowed={autoPlayAllowed}
         aspectRatio={aspectRatio}
         onAspectRatioChange={setAspectRatio}
+        cacheKey={cacheKey}
       />
     );
   }

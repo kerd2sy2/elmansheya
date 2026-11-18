@@ -20,6 +20,7 @@ import {
 } from '@/core/utils/googleDrive';
 import { InlineDriveVideoPlayer } from './InlineDriveVideoPlayer';
 import { NewsCardItem } from '../types/news.types';
+import { getCachedAspectRatio } from '../utils/mediaAspectRatioCache';
 
 interface SmallNewsCardProps {
   item: NewsCardItem;
@@ -174,8 +175,6 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
   onLayout,
 }: SmallNewsCardProps) {
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
-  const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
-  const { time, date } = formatPublishTimeAndDate(item.published_at);
   const directCoverUrl =
     getDirectImageUrl(item.cover_image_url) ||
     getGoogleDriveThumbnailUrl(item.video_stream_url);
@@ -183,6 +182,22 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
   const directVideoUrl = getDirectVideoUrl(item.video_stream_url);
   const hasImage = Boolean(directCoverUrl);
   const hasVideo = Boolean(directVideoUrl);
+
+  const cachedRatio =
+    item.aspect_ratio ||
+    getCachedAspectRatio([
+      item.id,
+      directCoverUrl,
+      directVideoUrl,
+      item.video_stream_url,
+      item.cover_image_url,
+    ]) ||
+    undefined;
+
+  const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(
+    cachedRatio || null
+  );
+  const { time, date } = formatPublishTimeAndDate(item.published_at);
 
   const isLongSummary =
     (item.summary?.length ?? 0) > 85 || (item.summary || '').includes('\n');
@@ -267,6 +282,8 @@ export const SmallNewsCard = React.memo(function SmallNewsCard({
             videoUrl={directVideoUrl!}
             coverImageUrl={directCoverUrl}
             isActive={isActive}
+            initialAspectRatio={cachedRatio}
+            cacheKey={item.id}
           />
         </View>
       ) : hasImage ? (

@@ -23,18 +23,20 @@ type NewsCardDTO struct {
 	IsFeatured        bool      `json:"is_featured"`
 	IsPinned          bool      `json:"is_pinned"`
 	HasLongText       bool      `json:"has_long_text"`
+	AspectRatio       float64   `json:"aspect_ratio,omitempty"`
 }
 
 type PublishNewsRequestDTO struct {
-	Title             string `json:"title"`
-	Summary           string `json:"summary"`
-	CoverImageURL     string `json:"cover_image_url"`
-	VideoStreamURL    string `json:"video_stream_url"`
-	AuthorDisplayName string `json:"author_display_name"`
-	AuthorIsVerified  bool   `json:"author_is_verified"`
-	AuthorBadgeLabel  string `json:"author_badge_label"`
-	IsBreaking        bool   `json:"is_breaking"`
-	IsPinnedFeatured  bool   `json:"is_pinned_featured"`
+	Title             string  `json:"title"`
+	Summary           string  `json:"summary"`
+	CoverImageURL     string  `json:"cover_image_url"`
+	VideoStreamURL    string  `json:"video_stream_url"`
+	AuthorDisplayName string  `json:"author_display_name"`
+	AuthorIsVerified  bool    `json:"author_is_verified"`
+	AuthorBadgeLabel  string  `json:"author_badge_label"`
+	IsBreaking        bool    `json:"is_breaking"`
+	IsPinnedFeatured  bool    `json:"is_pinned_featured"`
+	AspectRatio       float64 `json:"aspect_ratio,omitempty"`
 }
 
 type NewsFeedResponseDTO struct {
