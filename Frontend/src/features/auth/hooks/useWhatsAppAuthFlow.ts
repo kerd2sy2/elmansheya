@@ -9,29 +9,16 @@ import {
 } from '../api/auth.api';
 import { useAuth } from '../context/AuthContext';
 
+import {
+  COUNTRY_BY_CODE,
+  DEFAULT_COUNTRY,
+  type CountryDialOption,
+} from '../data/countries';
+
 export const ONBOARDING_SEEN_KEY = 'elmansheya_has_seen_onboarding_v1';
 const OTP_BACKOFF_STORAGE_KEY = 'elmansheya_otp_backoff_v1';
 
-export interface CountryDialOption {
-  code: string;
-  nameAr: string;
-  dialCode: string;
-  placeholder: string;
-}
-
-export const COUNTRY_OPTIONS: CountryDialOption[] = [
-  { code: 'EG', nameAr: 'مصر', dialCode: '+20', placeholder: '01012345678' },
-  { code: 'SA', nameAr: 'السعودية', dialCode: '+966', placeholder: '501234567' },
-  { code: 'AE', nameAr: 'الإمارات', dialCode: '+971', placeholder: '501234567' },
-  { code: 'KW', nameAr: 'الكويت', dialCode: '+965', placeholder: '51234567' },
-  { code: 'QA', nameAr: 'قطر', dialCode: '+974', placeholder: '33123456' },
-  { code: 'BH', nameAr: 'البحرين', dialCode: '+973', placeholder: '39123456' },
-  { code: 'OM', nameAr: 'عُمان', dialCode: '+968', placeholder: '91234567' },
-  { code: 'JO', nameAr: 'الأردن', dialCode: '+962', placeholder: '791234567' },
-  { code: 'LY', nameAr: 'ليبيا', dialCode: '+218', placeholder: '911234567' },
-  { code: 'SD', nameAr: 'السودان', dialCode: '+249', placeholder: '912345678' },
-];
-
+export type { CountryDialOption };
 export type AuthStep = 'phone' | 'otp' | 'register_details';
 
 export function formatResendWait(sec: number): string {
@@ -50,18 +37,11 @@ export function formatResendWait(sec: number): string {
 }
 
 export function formatInternationalPhone(dialCode: string, phone: string): string {
-  let cleanCode = dialCode.replace(/[^0-9]/g, '');
-  if (!cleanCode) cleanCode = '20';
-
+  const cleanCode = dialCode.replace(/[^0-9]/g, '') || '20';
   let cleanPhone = phone.replace(/[^0-9]/g, '');
-  if (cleanCode === '20' && cleanPhone.startsWith('0')) {
-    cleanPhone = cleanPhone.substring(1);
-  } else if (cleanCode === '966' && cleanPhone.startsWith('0')) {
-    cleanPhone = cleanPhone.substring(1);
-  } else if (cleanPhone.startsWith('0') && cleanPhone.length > 8) {
+  if (cleanPhone.startsWith('0')) {
     cleanPhone = cleanPhone.substring(1);
   }
-
   return `+${cleanCode}${cleanPhone}`;
 }
 
@@ -71,7 +51,9 @@ export function useWhatsAppAuthFlow() {
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
   const [step, setStep] = useState<AuthStep>('phone');
 
-  const [dialCode, setDialCode] = useState<string>('+20');
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>(
+    DEFAULT_COUNTRY.code
+  );
   const [phone, setPhone] = useState<string>('');
   const [showCountryPicker, setShowCountryPicker] = useState<boolean>(false);
 
@@ -95,9 +77,17 @@ export function useWhatsAppAuthFlow() {
   const otpInputRef = useRef<any>(null);
   const nameInputRef = useRef<any>(null);
 
+  const selectedCountry: CountryDialOption =
+    COUNTRY_BY_CODE[selectedCountryCode] || DEFAULT_COUNTRY;
+  const dialCode = selectedCountry.dialCode;
+
   const isOtpLocked = wrongOtpAttempts >= 3;
-  const requiredPhoneLength = phone.startsWith('0') ? 11 : 10;
-  const isPhoneComplete = phone.length === requiredPhoneLength;
+  const hasLeadingZero = phone.startsWith('0');
+  const minPhoneLength = selectedCountry.minDigits + (hasLeadingZero ? 1 : 0);
+  const maxPhoneLength = selectedCountry.maxDigits + (hasLeadingZero ? 1 : 0);
+  const requiredPhoneLength = maxPhoneLength;
+  const isPhoneComplete =
+    phone.length >= minPhoneLength && phone.length <= maxPhoneLength;
   const fullInternationalPhone = formatInternationalPhone(dialCode, phone);
   const currentFullPhone = isPhoneComplete ? fullInternationalPhone : '';
   const isSendBatchBlocked =
@@ -176,14 +166,12 @@ export function useWhatsAppAuthFlow() {
     setHasSeenOnboarding(true);
   }, []);
 
-  const handleDialCodeChange = useCallback((text: string) => {
-    const digitsOnly = text.replace(/[^0-9]/g, '');
-    setDialCode(digitsOnly ? `+${digitsOnly}` : '+');
-    setErrorText(null);
-  }, []);
-
-  const handleSelectCountryDial = useCallback((code: string) => {
-    setDialCode(code);
+  const handleSelectCountry = useCallback((countryCode: string) => {
+    const nextCountry = COUNTRY_BY_CODE[countryCode] || DEFAULT_COUNTRY;
+    setSelectedCountryCode(nextCountry.code);
+    setPhone((prev) =>
+      prev.slice(0, nextCountry.maxDigits + (prev.startsWith('0') ? 1 : 0))
+    );
     setShowCountryPicker(false);
     setErrorText(null);
     setTimeout(() => phoneInputRef.current?.focus(), 150);
@@ -191,18 +179,12 @@ export function useWhatsAppAuthFlow() {
 
   const handlePhoneChange = useCallback(
     (text: string) => {
-      let clean = text.replace(/[^0-9]/g, '');
-      const maxLen = clean.startsWith('0') ? 11 : 10;
-      clean = clean.slice(0, maxLen);
-      if (clean.startsWith('05') && clean.length >= 3 && dialCode === '+20') {
-        setDialCode('+966');
-      } else if (clean.startsWith('01') && clean.length >= 3 && dialCode === '+966') {
-        setDialCode('+20');
-      }
-      setPhone(clean);
+      const clean = text.replace(/[^0-9]/g, '');
+      const maxLen = selectedCountry.maxDigits + (clean.startsWith('0') ? 1 : 0);
+      setPhone(clean.slice(0, maxLen));
       setErrorText(null);
     },
-    [dialCode]
+    [selectedCountry.maxDigits]
   );
 
   const handleVerifyOtp = useCallback(
@@ -337,10 +319,14 @@ export function useWhatsAppAuthFlow() {
     }
 
     if (!isPhoneComplete) {
+      const unitLabel = minPhoneLength <= 10 ? 'أرقام' : 'رقماً';
+      const countLabel =
+        minPhoneLength === maxPhoneLength
+          ? `${minPhoneLength} ${unitLabel}`
+          : `من ${minPhoneLength} إلى ${maxPhoneLength} أرقام`;
+      const zeroHint = hasLeadingZero ? ' عند البدء بـ 0' : ' بدون 0 في البداية';
       setErrorText(
-        phone.startsWith('0')
-          ? 'يرجى إكمال رقم الهاتف (11 رقماً عند البدء بـ 0).'
-          : 'يرجى إكمال رقم الهاتف (10 أرقام بدون 0 في البداية).'
+        `يرجى إكمال رقم الهاتف لدولة ${selectedCountry.nameAr} (${countLabel}${zeroHint}).`
       );
       return;
     }
@@ -388,9 +374,13 @@ export function useWhatsAppAuthFlow() {
     }
   }, [
     dialCode,
+    hasLeadingZero,
     isPhoneComplete,
+    maxPhoneLength,
+    minPhoneLength,
     phone,
     resendTimer,
+    selectedCountry.nameAr,
     step,
     isSendBatchBlocked,
     lastSentPhone,
@@ -464,6 +454,7 @@ export function useWhatsAppAuthFlow() {
   return {
     hasSeenOnboarding,
     step,
+    selectedCountry,
     dialCode,
     phone,
     showCountryPicker,
@@ -472,6 +463,8 @@ export function useWhatsAppAuthFlow() {
     setOtpCode,
     resendTimer,
     isOtpLocked,
+    minPhoneLength,
+    maxPhoneLength,
     requiredPhoneLength,
     fullInternationalPhone,
     isSendBatchBlocked,
@@ -494,8 +487,7 @@ export function useWhatsAppAuthFlow() {
     otpInputRef,
     nameInputRef,
     handleCompleteOnboarding,
-    handleDialCodeChange,
-    handleSelectCountryDial,
+    handleSelectCountry,
     handlePhoneChange,
     handleSendWhatsAppOtp,
     handleVerifyOtp,

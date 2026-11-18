@@ -90,7 +90,7 @@ export function LoginScreen() {
 
             {flow.step === 'phone' ? (
               <PhoneEntryStep
-                dialCode={flow.dialCode}
+                selectedCountry={flow.selectedCountry}
                 phone={flow.phone}
                 requiredPhoneLength={flow.requiredPhoneLength}
                 submitting={flow.submitting}
@@ -101,12 +101,11 @@ export function LoginScreen() {
                 resendTimer={flow.resendTimer}
                 showCountryPicker={flow.showCountryPicker}
                 phoneInputRef={flow.phoneInputRef}
-                onChangeDialCode={flow.handleDialCodeChange}
                 onChangePhone={flow.handlePhoneChange}
                 onSubmit={flow.handleSendWhatsAppOtp}
                 onOpenCountryPicker={handleOpenCountryPicker}
                 onCloseCountryPicker={handleCloseCountryPicker}
-                onSelectCountryDial={flow.handleSelectCountryDial}
+                onSelectCountry={flow.handleSelectCountry}
                 onReturnToOtp={flow.handleReturnToOtp}
               />
             ) : null}

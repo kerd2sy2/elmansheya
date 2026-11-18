@@ -1,23 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { memo } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { APP_THEME } from '@/core/theme/colors';
-import { rtlFlexDirection } from '@/core/theme/rtl';
-import { COUNTRY_OPTIONS, formatResendWait } from '../hooks/useWhatsAppAuthFlow';
+import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
+import {
+  DEFAULT_COUNTRY,
+  filterCountries,
+  type CountryDialOption,
+} from '../data/countries';
+import { formatResendWait } from '../hooks/useWhatsAppAuthFlow';
 import { authStepStyles } from '../styles/authStepStyles';
 
 interface PhoneEntryStepProps {
-  dialCode: string;
+  selectedCountry: CountryDialOption;
   phone: string;
   requiredPhoneLength: number;
   submitting: boolean;
@@ -28,17 +34,16 @@ interface PhoneEntryStepProps {
   resendTimer: number;
   showCountryPicker: boolean;
   phoneInputRef: React.RefObject<any>;
-  onChangeDialCode: (text: string) => void;
   onChangePhone: (text: string) => void;
   onSubmit: () => void;
   onOpenCountryPicker: () => void;
   onCloseCountryPicker: () => void;
-  onSelectCountryDial: (dialCode: string) => void;
+  onSelectCountry: (countryCode: string) => void;
   onReturnToOtp: () => void;
 }
 
 export const PhoneEntryStep = memo(function PhoneEntryStep({
-  dialCode,
+  selectedCountry = DEFAULT_COUNTRY,
   phone,
   requiredPhoneLength,
   submitting,
@@ -49,14 +54,69 @@ export const PhoneEntryStep = memo(function PhoneEntryStep({
   resendTimer,
   showCountryPicker,
   phoneInputRef,
-  onChangeDialCode,
   onChangePhone,
   onSubmit,
   onOpenCountryPicker,
   onCloseCountryPicker,
-  onSelectCountryDial,
+  onSelectCountry,
   onReturnToOtp,
 }: PhoneEntryStepProps) {
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  useEffect(() => {
+    setSearchQuery('');
+  }, [showCountryPicker]);
+
+  const filteredCountries = useMemo(
+    () => filterCountries(searchQuery),
+    [searchQuery]
+  );
+
+  const activeCountry = selectedCountry ?? DEFAULT_COUNTRY;
+
+  const renderCountryItem = useCallback(
+    ({ item }: { item: CountryDialOption }) => {
+      const isSelected = item.code === activeCountry.code;
+      return (
+        <Pressable
+          style={[
+            styles.countryOptionRow,
+            isSelected && styles.countryOptionRowActive,
+          ]}
+          onPress={() => onSelectCountry(item.code)}>
+          <Text
+            style={[
+              styles.countryOptionName,
+              isSelected && styles.countryOptionNameActive,
+            ]}
+            numberOfLines={1}>
+            {item.nameAr}
+          </Text>
+
+          <View style={styles.countryOptionRight}>
+            <Text
+              style={[
+                styles.countryOptionDial,
+                isSelected && styles.countryOptionDialActive,
+              ]}>
+              {item.dialCode}
+            </Text>
+            {isSelected ? (
+              <Ionicons
+                name="checkmark-circle"
+                size={18}
+                color={APP_THEME.primary}
+              />
+            ) : (
+              <View style={styles.checkSpacer} />
+            )}
+          </View>
+        </Pressable>
+      );
+    },
+    [onSelectCountry, activeCountry.code]
+  );
+
   return (
     <View style={authStepStyles.stepBody}>
       <Text style={authStepStyles.cardTitle}>تسجيل الدخول</Text>
@@ -66,22 +126,13 @@ export const PhoneEntryStep = memo(function PhoneEntryStep({
 
       <View style={authStepStyles.fieldBlock}>
         <View style={styles.ltrPhoneBar}>
-          <View style={styles.dialKeyGroup}>
-            <Pressable
-              onPress={onOpenCountryPicker}
-              style={styles.dropdownTrigger}
-              hitSlop={8}>
-              <Ionicons name="chevron-down" size={15} color="#64748B" />
-            </Pressable>
-            <TextInput
-              style={styles.dialCodeInput}
-              value={dialCode}
-              onChangeText={onChangeDialCode}
-              keyboardType="phone-pad"
-              maxLength={5}
-              selectionColor={APP_THEME.primary}
-            />
-          </View>
+          <Pressable
+            onPress={onOpenCountryPicker}
+            style={styles.dialKeySelector}
+            hitSlop={6}>
+            <Ionicons name="chevron-down" size={15} color="#64748B" />
+            <Text style={styles.dialCodeText}>{activeCountry.dialCode}</Text>
+          </Pressable>
 
           <View style={styles.verticalDivider} />
 
@@ -154,10 +205,12 @@ export const PhoneEntryStep = memo(function PhoneEntryStep({
         statusBarTranslucent
         animationType="slide"
         onRequestClose={onCloseCountryPicker}>
-        <Pressable style={styles.modalBackdrop} onPress={onCloseCountryPicker}>
-          <Pressable
-            style={styles.countrySheet}
-            onPress={(e) => e.stopPropagation()}>
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable style={styles.backdropDismiss} onPress={onCloseCountryPicker} />
+
+          <View style={styles.countrySheet}>
             <View style={styles.sheetHandle} />
 
             <View style={styles.sheetHeader}>
@@ -170,51 +223,50 @@ export const PhoneEntryStep = memo(function PhoneEntryStep({
               </Pressable>
             </View>
 
-            <ScrollView
-              style={styles.countryScroll}
-              showsVerticalScrollIndicator={false}>
-              {COUNTRY_OPTIONS.map((item) => {
-                const isSelected = dialCode === item.dialCode;
-                return (
-                  <Pressable
-                    key={item.code}
-                    style={[
-                      styles.countryOptionRow,
-                      isSelected && styles.countryOptionRowActive,
-                    ]}
-                    onPress={() => onSelectCountryDial(item.dialCode)}>
-                    <Text
-                      style={[
-                        styles.countryOptionName,
-                        isSelected && styles.countryOptionNameActive,
-                      ]}>
-                      {item.nameAr}
-                    </Text>
+            <View style={styles.searchBar}>
+              <Ionicons name="search" size={18} color="#64748B" />
+              <TextInput
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="ابحث عن الدولة أو المفتاح..."
+                placeholderTextColor="#94A3B8"
+                selectionColor={APP_THEME.primary}
+                returnKeyType="search"
+                autoCorrect={false}
+              />
+              {searchQuery ? (
+                <Pressable
+                  onPress={() => setSearchQuery('')}
+                  hitSlop={8}>
+                  <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                </Pressable>
+              ) : null}
+            </View>
 
-                    <View style={styles.countryOptionRight}>
-                      <Text
-                        style={[
-                          styles.countryOptionDial,
-                          isSelected && styles.countryOptionDialActive,
-                        ]}>
-                        {item.dialCode}
-                      </Text>
-                      {isSelected ? (
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={18}
-                          color={APP_THEME.primary}
-                        />
-                      ) : (
-                        <View style={styles.checkSpacer} />
-                      )}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
+            <FlatList
+              data={filteredCountries}
+              keyExtractor={(item) => item.code}
+              renderItem={renderCountryItem}
+              style={styles.countryList}
+              contentContainerStyle={
+                filteredCountries.length === 0 ? styles.emptyListContainer : undefined
+              }
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              initialNumToRender={16}
+              maxToRenderPerBatch={20}
+              windowSize={7}
+              ListEmptyComponent={
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateText}>
+                    لا توجد دولة مطابقة للبحث
+                  </Text>
+                </View>
+              }
+            />
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -232,33 +284,25 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 12,
   },
-  dialKeyGroup: {
+  dialKeySelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-  },
-  dropdownTrigger: {
-    padding: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dialCodeInput: {
+    gap: 4,
     height: 52,
+    paddingHorizontal: 4,
+  },
+  dialCodeText: {
     fontSize: 17,
     fontWeight: '700',
     color: APP_THEME.primary,
-    textAlign: 'center',
     writingDirection: 'ltr',
-    paddingVertical: 0,
-    paddingHorizontal: 2,
     includeFontPadding: false,
-    textAlignVertical: 'center',
   },
   verticalDivider: {
     width: 1,
     height: 22,
     backgroundColor: '#CBD5E1',
-    marginLeft: 4,
+    marginLeft: 6,
     marginRight: 8,
   },
   ltrPhoneInput: {
@@ -295,14 +339,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'flex-end',
   },
+  backdropDismiss: {
+    flex: 1,
+  },
   countrySheet: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: Platform.OS === 'android' ? 24 : 36,
-    maxHeight: '65%',
+    paddingBottom: Platform.OS === 'android' ? 20 : 32,
+    height: '72%',
   },
   sheetHandle: {
     width: 40,
@@ -316,7 +363,7 @@ const styles = StyleSheet.create({
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   sheetTitle: {
     fontSize: 17,
@@ -331,8 +378,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  countryScroll: {
+  searchBar: {
+    flexDirection: rtlFlexDirection,
+    alignItems: 'center',
+    gap: 8,
+    height: 46,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  searchInput: {
+    flex: 1,
+    height: 44,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+    textAlign: rtlTextAlign,
+    paddingVertical: 0,
+    includeFontPadding: false,
+  },
+  countryList: {
+    flex: 1,
     width: '100%',
+  },
+  emptyListContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748B',
   },
   countryOptionRow: {
     flexDirection: rtlFlexDirection,
@@ -351,9 +434,12 @@ const styles = StyleSheet.create({
     borderColor: APP_THEME.primaryBorder,
   },
   countryOptionName: {
+    flex: 1,
     fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
+    textAlign: rtlTextAlign,
+    marginHorizontal: 8,
   },
   countryOptionNameActive: {
     color: APP_THEME.primary,
