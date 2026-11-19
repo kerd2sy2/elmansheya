@@ -3,16 +3,12 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   BackHandler,
   Linking,
-  Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import {
@@ -22,8 +18,6 @@ import {
 import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
 import { fetchModuleData } from '@/core/api-client/apiClient';
 import { WidgetErrorBoundary } from '@/core/error-boundary/WidgetErrorBoundary';
-import { useAuth } from '@/features/auth/context/AuthContext';
-import { API_BASE_URL } from '@/core/config/api.config';
 import { ServiceCategoryGridCard } from '../components/ServiceCategoryGridCard';
 import {
   ServiceCategoryItem,
@@ -32,7 +26,7 @@ import {
 } from '../types/services.types';
 
 /* ========================================================
-   أقسام الخدمات الـ ٨ الرئيسية وتفريعاتها الدقيقة (حسب طلب أهالي القرية)
+   أقسام الخدمات الـ ٨ الرئيسية وتفريعاتها الدقيقة لقرية المنشية
    ======================================================== */
 export const ALL_SERVICE_CATEGORIES: ServiceCategoryItem[] = [
   {
@@ -114,7 +108,7 @@ export const ALL_SERVICE_CATEGORIES: ServiceCategoryItem[] = [
         slug: 'tuktuk',
         name_ar: 'التكاتك',
         icon: 'bicycle-outline',
-        description: 'التوصيل المحلي والمشاوير الداخلية ومسؤولي شكاوى التكاتك',
+        description: 'التوصيل المحلي والمشاوير الداخلية ومسؤولو شكاوى التكاتك',
       },
       {
         id: 'taxi',
@@ -764,31 +758,20 @@ export function ServicesScreen() {
   const router = useRouter();
   const topInset = useSafeTopInset();
   const bottomTabPadding = useSafeBottomTabPadding();
-  const { user } = useAuth();
 
-  // المستوى الأول: القسم الرئيسي المختار (مثلاً: طبي، مواصلات، مدارس، ديني، حكومي...)
+  // المستوى الأول: القسم الرئيسي المختار (طبي، مواصلات، مدارس، ديني، حكومي...)
   const [selectedCategory, setSelectedCategory] =
     useState<ServiceCategoryItem | null>(null);
 
-  // المستوى الثاني: الخدمة الفرعية المحددة (مثلاً: الصيدليات، المعامل، المستشفيات، التكاتك...)
+  // المستوى الثاني: الخدمة الفرعية المحددة (الصيدليات، المعامل، المستشفيات، التكاتك...)
   const [selectedSubCategory, setSelectedSubCategory] =
     useState<ServiceSubCategory | null>(null);
 
   const [allServices, setAllServices] =
     useState<ServiceDetailItem[]>(SEED_SERVICES_LIST);
   const [loadingItems, setLoadingItems] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // موديول إضافة خدمة جديدة في هذا القسم
-  const [showAddModal, setShowAddModal] = useState<boolean>(false);
-  const [newTitle, setNewTitle] = useState<string>('');
-  const [newDesc, setNewDesc] = useState<string>('');
-  const [newPhone, setNewPhone] = useState<string>('');
-  const [newHours, setNewHours] = useState<string>('');
-  const [newAddress, setNewAddress] = useState<string>('');
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-
-  // تحميل الخدمات المحدثة من السيرفر إن وُجدت
+  // تحميل أحدث بيانات الخدمات من السيرفر إن وُجدت
   const loadServerServices = useCallback(async () => {
     try {
       setLoadingItems(true);
@@ -798,14 +781,13 @@ export function ServicesScreen() {
         { cooldownMs: 0, fallbackData: [] }
       );
       if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        // دمج الخدمات من السيرفر مع الخدمات الأساسية ومنع التكرار
         const mergedMap = new Map<string, ServiceDetailItem>();
         SEED_SERVICES_LIST.forEach((s) => mergedMap.set(s.id, s));
         res.data.forEach((s) => mergedMap.set(s.id, s));
         setAllServices(Array.from(mergedMap.values()));
       }
     } catch {
-      // وضع الأوفلاين يستخدم البيانات الموثقة الأساسية
+      // وضع الأوفلاين يعتمد على البيانات المعتمدة محلياً
     } finally {
       setLoadingItems(false);
     }
@@ -815,58 +797,30 @@ export function ServicesScreen() {
     loadServerServices();
   }, [loadServerServices]);
 
-  // حساب عدد الخدمات في كل تفرع فرعي
-  const countBySubcategory = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const item of allServices) {
-      if (item.subcategory_slug) {
-        counts[item.subcategory_slug] = (counts[item.subcategory_slug] || 0) + 1;
-      }
-    }
-    return counts;
-  }, [allServices]);
-
-  // قائمة الخدمات المفلترة بحسب القسم الرئيسي والفرعي المختارين وكلمة البحث
+  // قائمة الخدمات المفلترة بحسب القسم الرئيسي والفرعي المختارين
   const filteredServices = useMemo(() => {
     if (!selectedCategory || !selectedSubCategory) return [];
-    let list = allServices.filter(
+    return allServices.filter(
       (s) =>
         s.category_slug === selectedCategory.slug &&
         s.subcategory_slug === selectedSubCategory.slug
     );
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      list = list.filter(
-        (s) =>
-          s.title.toLowerCase().includes(q) ||
-          s.description.toLowerCase().includes(q) ||
-          (s.address && s.address.toLowerCase().includes(q))
-      );
-    }
-    return list;
-  }, [allServices, selectedCategory, selectedSubCategory, searchQuery]);
+  }, [allServices, selectedCategory, selectedSubCategory]);
 
   /* ========================================================
      إدارة زر الرجوع الفيزيائي بالهاتف (Hardware Back Button)
      خطوة واحدة دائماً:
-     المستوى الثاني (تفاصيل الخدمة الفرعية) ← المستوى الأول (كروت القسم) ← المستوى صفر (كل الخدمات) ← السجل السابق
+     المستوى الثاني (قائمة الخدمات) ← المستوى الأول (كروت القسم في صف لوحده) ← المستوى صفر (كل الخدمات) ← السجل السابق
      ======================================================== */
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        if (showAddModal) {
-          setShowAddModal(false);
-          return true;
-        }
         if (selectedSubCategory) {
           setSelectedSubCategory(null);
-          setSearchQuery('');
           return true;
         }
         if (selectedCategory) {
           setSelectedCategory(null);
-          setSearchQuery('');
           return true;
         }
         return false;
@@ -874,59 +828,15 @@ export function ServicesScreen() {
 
       const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => sub.remove();
-    }, [showAddModal, selectedSubCategory, selectedCategory])
+    }, [selectedSubCategory, selectedCategory])
   );
-
-  // إرسال وحفظ خدمة جديدة
-  const handleCreateService = async () => {
-    if (!newTitle.trim()) {
-      Alert.alert('تنبيه', 'يرجى كتابة اسم الخدمة أو الجهة');
-      return;
-    }
-    if (!selectedCategory || !selectedSubCategory) return;
-
-    setIsSubmitting(true);
-    const newServiceItem: ServiceDetailItem = {
-      id: `srv-${Date.now()}`,
-      category_slug: selectedCategory.slug,
-      subcategory_slug: selectedSubCategory.slug,
-      title: newTitle.trim(),
-      description: newDesc.trim() || 'خدمة مسجلة في دليل قرية المنشية',
-      phone: newPhone.trim() || undefined,
-      working_hours: newHours.trim() || undefined,
-      address: newAddress.trim() || 'قرية المنشية',
-      created_at: new Date().toISOString(),
-    };
-
-    // حفظ فوري محلياً لضمان سرعة الاستجابة
-    setAllServices((prev) => [newServiceItem, ...prev]);
-
-    try {
-      await fetch(`${API_BASE_URL}/services/create-item`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newServiceItem),
-      });
-    } catch {
-      // Saved locally
-    }
-
-    setIsSubmitting(false);
-    setShowAddModal(false);
-    setNewTitle('');
-    setNewDesc('');
-    setNewPhone('');
-    setNewHours('');
-    setNewAddress('');
-    Alert.alert('تمت الإضافة', `تمت إضافة «${newServiceItem.title}» بنجاح في قسم ${selectedSubCategory.name_ar}.`);
-  };
 
   return (
     <View style={[styles.screenContainer, { paddingTop: topInset }]}>
       {selectedSubCategory && selectedCategory ? (
         /* ========================================================
-           المستوى الثاني: صفحة الخدمة الفرعية المحددة (مثلاً: الصيدليات، المعامل، التكاتك...)
-           مع سهم رجوع نظيف ومحاذاة يمين كاملة
+           المستوى الثاني: صفحة تفاصيل الخدمة الفرعية المحددة (مثلاً: الصيدليات، المعامل، التكاتك...)
+           بدون بحث، وبدون خط فاصل، وبدون إمكانية إضافة خدمة
            ======================================================== */
         <View style={styles.tabContainer}>
           <View style={styles.subPageFixedHeader}>
@@ -934,10 +844,7 @@ export function ServicesScreen() {
               {/* سهم الرجوع النظيف للعودة للقسم الرئيسي */}
               <Pressable
                 style={styles.cleanBackArrowBtn}
-                onPress={() => {
-                  setSelectedSubCategory(null);
-                  setSearchQuery('');
-                }}
+                onPress={() => setSelectedSubCategory(null)}
                 hitSlop={12}
                 accessibilityLabel="رجوع لقائمة الخدمات">
                 <Ionicons
@@ -961,36 +868,8 @@ export function ServicesScreen() {
                   {selectedSubCategory.name_ar}
                 </Text>
               </View>
-
-              {/* زر إضافة جهة أو خدمة جديدة في هذا القسم */}
-              <Pressable
-                style={styles.headerAddIconBtn}
-                onPress={() => setShowAddModal(true)}
-                hitSlop={8}
-                accessibilityLabel="إضافة جهة أو خدمة جديدة">
-                <Ionicons name="add" size={24} color="#FFFFFF" />
-              </Pressable>
             </View>
             <Text style={styles.subPageDesc}>{selectedSubCategory.description}</Text>
-          </View>
-
-          {/* شريط البحث السريع داخل خدمات هذا القسم */}
-          <View style={styles.searchBarBox}>
-            <Ionicons name="search-outline" size={18} color="#94A3B8" />
-            <TextInput
-              style={styles.searchBarInput}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder={`ابحث في ${selectedSubCategory.name_ar} بالاسم أو المكان...`}
-              placeholderTextColor="#94A3B8"
-              textAlign="right"
-              returnKeyType="search"
-            />
-            {searchQuery ? (
-              <Pressable onPress={() => setSearchQuery('')} hitSlop={10}>
-                <Ionicons name="close-circle" size={18} color="#94A3B8" />
-              </Pressable>
-            ) : null}
           </View>
 
           <ScrollView
@@ -1020,19 +899,11 @@ export function ServicesScreen() {
                 <View style={styles.emptyBox}>
                   <Ionicons name="folder-open-outline" size={38} color="#94A3B8" />
                   <Text style={styles.emptyTitle}>
-                    {searchQuery
-                      ? 'لا توجد نتائج تطابق بحثك'
-                      : `لا توجد خدمات مسجلة بعد في «${selectedSubCategory.name_ar}»`}
+                    لا توجد خدمات مسجلة حالياً في «{selectedSubCategory.name_ar}»
                   </Text>
                   <Text style={styles.emptyDesc}>
-                    اضغط على زر (+) في الأعلى لإضافة أول جهة أو رقم تواصل في هذا القسم لخدمة جيرانك بالقرية.
+                    يتم مراجعة وتحديث الأماكن والخدمات من قبل إدارة المنصة لخدمة أهالي القرية.
                   </Text>
-                  <Pressable
-                    style={styles.emptyAddBtn}
-                    onPress={() => setShowAddModal(true)}>
-                    <Ionicons name="add-circle" size={17} color="#FFFFFF" />
-                    <Text style={styles.emptyAddBtnText}>إضافة جهة أو رقم في {selectedSubCategory.name_ar}</Text>
-                  </Pressable>
                 </View>
               ) : (
                 <View style={styles.itemsList}>
@@ -1063,7 +934,7 @@ export function ServicesScreen() {
                         </View>
                       ) : null}
 
-                      {/* العنوان ومكان الخدمة بالقرية */}
+                      {/* المكان والعنوان بالقرية */}
                       {it.address ? (
                         <View style={styles.metaRow}>
                           <Ionicons name="location-outline" size={14} color="#64748B" />
@@ -1080,7 +951,7 @@ export function ServicesScreen() {
       ) : selectedCategory ? (
         /* ========================================================
            المستوى الأول: صفحة القسم المختار (طبي، مواصلات، مناسبات، مدارس...)
-           تظهر كروت التفرعات الدقيقة (الصيدليات، المعامل، المستشفيات...)
+           الكروت تظهر في صف لوحدها (Full-width Row) بدون أرقام وبدون خط فاصل في الهيدر
            ======================================================== */
         <View style={styles.tabContainer}>
           <View style={styles.subPageFixedHeader}>
@@ -1127,33 +998,53 @@ export function ServicesScreen() {
             canCancelContentTouches={true}
             directionalLockEnabled={false}
             overScrollMode="always">
-            <WidgetErrorBoundary widgetNameAr="كروت الخدمات الفرعية">
+            <WidgetErrorBoundary widgetNameAr="كروت الخدمات الفرعية في صف لوحدها">
               <View style={styles.detailsHeaderRow}>
                 <Text style={styles.detailsTitle}>
-                  اختر الخدمة المطلوبة ({selectedCategory.subcategories.length})
+                  اختر الخدمة المطلوبة
                 </Text>
               </View>
 
-              <View style={styles.grid}>
-                {selectedCategory.subcategories.map((sub) => {
-                  const subCount = countBySubcategory[sub.slug] || 0;
-                  return (
-                    <ServiceCategoryGridCard
-                      key={sub.id}
-                      item={sub}
-                      isSelected={false}
-                      count={subCount}
-                      onPress={() => setSelectedSubCategory(sub)}
-                    />
-                  );
-                })}
+              {/* كل كرت يظهر في صف لوحده ممتد بالكامل بنمط أنيق */}
+              <View style={styles.subCategoriesList}>
+                {selectedCategory.subcategories.map((sub) => (
+                  <Pressable
+                    key={sub.id}
+                    style={({ pressed }) => [
+                      styles.subCategoryRowCard,
+                      pressed && styles.subCategoryRowCardPressed,
+                    ]}
+                    onPress={() => setSelectedSubCategory(sub)}>
+                    <View style={styles.subCategoryRowRight}>
+                      <View style={styles.subCategoryRowIconBox}>
+                        <Ionicons
+                          name={
+                            (sub.icon ||
+                              'checkmark-circle-outline') as keyof typeof Ionicons.glyphMap
+                          }
+                          size={22}
+                          color="#973c00"
+                        />
+                      </View>
+                      <View style={styles.subCategoryRowTexts}>
+                        <Text style={styles.subCategoryRowTitle}>
+                          {sub.name_ar}
+                        </Text>
+                        <Text style={styles.subCategoryRowDesc} numberOfLines={2}>
+                          {sub.description}
+                        </Text>
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-back" size={20} color="#94A3B8" />
+                  </Pressable>
+                ))}
               </View>
             </WidgetErrorBoundary>
           </ScrollView>
         </View>
       ) : (
         /* ========================================================
-           المستوى صفر: الصفحة الرئيسية للخدمات (هيدر ثابت وشبكة الأقسام الـ ٨ بدون مشاكل القرية)
+           المستوى صفر: الصفحة الرئيسية للخدمات (هيدر ثابت وشبكة الأقسام الـ ٨ بدون أي أرقام)
            ======================================================== */
         <View style={styles.tabContainer}>
           <View style={styles.fixedHeader}>
@@ -1183,7 +1074,6 @@ export function ServicesScreen() {
                     key={cat.id}
                     item={cat}
                     isSelected={false}
-                    count={cat.subcategories.length}
                     onPress={() => setSelectedCategory(cat)}
                   />
                 ))}
@@ -1192,107 +1082,6 @@ export function ServicesScreen() {
           </ScrollView>
         </View>
       )}
-
-      {/* ========================================================
-         موديول إضافة جهة أو خدمة جديدة في القسم الفرعي
-         ======================================================== */}
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        transparent
-        statusBarTranslucent
-        onRequestClose={() => setShowAddModal(false)}>
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setShowAddModal(false)}>
-          <View
-            style={styles.modalContainer}
-            onStartShouldSetResponder={() => true}>
-            <View style={styles.modalDragBar} />
-
-            <View style={styles.modalTopRow}>
-              <Text style={styles.modalHeading}>
-                إضافة جهة في «{selectedSubCategory?.name_ar}»
-              </Text>
-              <Pressable
-                onPress={() => setShowAddModal(false)}
-                hitSlop={10}
-                style={styles.modalCloseBtn}>
-                <Ionicons name="close" size={20} color="#64748B" />
-              </Pressable>
-            </View>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled">
-              <Text style={styles.inputLabel}>
-                الاسم أو الجهة <Text style={styles.star}>*</Text>
-              </Text>
-              <TextInput
-                style={styles.inputField}
-                value={newTitle}
-                onChangeText={setNewTitle}
-                placeholder="مثال: صيدلية الأمل، تاكسي أبو علي..."
-                placeholderTextColor="#94A3B8"
-                textAlign="right"
-              />
-
-              <Text style={styles.inputLabel}>رقم الهاتف للاتصال المباشر</Text>
-              <TextInput
-                style={styles.inputField}
-                value={newPhone}
-                onChangeText={setNewPhone}
-                placeholder="010XXXXXXXX"
-                placeholderTextColor="#94A3B8"
-                keyboardType="phone-pad"
-                textAlign="right"
-              />
-
-              <Text style={styles.inputLabel}>المكان والعنوان بالقرية</Text>
-              <TextInput
-                style={styles.inputField}
-                value={newAddress}
-                onChangeText={setNewAddress}
-                placeholder="مثال: شارع داير الناحية، بجوار المسجد الكبير..."
-                placeholderTextColor="#94A3B8"
-                textAlign="right"
-              />
-
-              <Text style={styles.inputLabel}>مواعيد العمل أو التواجد</Text>
-              <TextInput
-                style={styles.inputField}
-                value={newHours}
-                onChangeText={setNewHours}
-                placeholder="مثال: 9 ص : 10 م، 24 ساعة..."
-                placeholderTextColor="#94A3B8"
-                textAlign="right"
-              />
-
-              <Text style={styles.inputLabel}>تفاصيل أو ملاحظات إضافية</Text>
-              <TextInput
-                style={[styles.inputField, styles.textAreaField]}
-                value={newDesc}
-                onChangeText={setNewDesc}
-                placeholder="تفاصيل التخصص، الخدمات المتوفرة، أو الحجز..."
-                placeholderTextColor="#94A3B8"
-                multiline
-                numberOfLines={3}
-                textAlign="right"
-              />
-
-              <Pressable
-                style={styles.submitBtn}
-                onPress={handleCreateService}
-                disabled={isSubmitting}>
-                <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
-                <Text style={styles.submitBtnText}>
-                  {isSubmitting ? 'جاري الحفظ...' : 'حفظ ونشر الخدمة بالدليل'}
-                </Text>
-              </Pressable>
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
@@ -1300,7 +1089,7 @@ export function ServicesScreen() {
 const styles = StyleSheet.create({
   screenContainer: { flex: 1, backgroundColor: '#FAF5EE' },
   tabContainer: { flex: 1, width: '100%' },
-  content: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 5 },
+  content: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 5 },
   fixedHeader: {
     flexDirection: rtlFlexDirection,
     justifyContent: 'space-between',
@@ -1328,13 +1117,13 @@ const styles = StyleSheet.create({
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
   },
+  // هيدر بدون أي خط فاصل مع الخلفية (#FAF5EE)
   subPageFixedHeader: {
     backgroundColor: '#FAF5EE',
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1E9DA',
+    paddingBottom: 8,
+    borderBottomWidth: 0,
   },
   subPageHeaderRow: {
     flexDirection: rtlFlexDirection,
@@ -1363,43 +1152,88 @@ const styles = StyleSheet.create({
   subPageDesc: {
     fontSize: 12,
     color: '#64748B',
-    marginTop: 4,
+    marginTop: 3,
     marginRight: 48,
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
     lineHeight: 18,
   },
-  headerAddIconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#973c00',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#973c00',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  searchBarBox: {
+  grid: {
     flexDirection: rtlFlexDirection,
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  detailsHeaderRow: {
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  detailsTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: rtlTextAlign,
+    writingDirection: 'rtl',
+  },
+  // قائمة الكروت الفرعية بحيث يظهر كل كرت في صف لوحده
+  subCategoriesList: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  subCategoryRowCard: {
+    flexDirection: rtlFlexDirection,
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
     backgroundColor: '#FFFFFF',
-    marginHorizontal: 16,
-    marginTop: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    height: 42,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
   },
-  searchBarInput: {
+  subCategoryRowCardPressed: {
+    backgroundColor: '#FFF7ED',
+    borderColor: '#FED7AA',
+  },
+  subCategoryRowRight: {
+    flexDirection: rtlFlexDirection,
+    alignItems: 'center',
+    gap: 12,
     flex: 1,
-    fontSize: 12.5,
+  },
+  subCategoryRowIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FFF7ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subCategoryRowTexts: {
+    flex: 1,
+    gap: 2,
+    alignItems: 'flex-start',
+  },
+  subCategoryRowTitle: {
+    fontSize: 15.5,
+    fontWeight: '800',
     color: '#0F172A',
-    paddingVertical: 0,
+    textAlign: rtlTextAlign,
+    writingDirection: 'rtl',
+    width: '100%',
+  },
+  subCategoryRowDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: rtlTextAlign,
+    writingDirection: 'rtl',
+    lineHeight: 17,
+    width: '100%',
   },
   loadingBox: {
     alignItems: 'center',
@@ -1412,25 +1246,8 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textAlign: rtlTextAlign,
   },
-  grid: {
-    flexDirection: rtlFlexDirection,
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  detailsHeaderRow: {
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  detailsTitle: {
-    fontSize: 15.5,
-    fontWeight: '700',
-    color: '#0F172A',
-    textAlign: rtlTextAlign,
-    writingDirection: 'rtl',
-  },
   itemsList: {
-    gap: 12,
+    gap: 10,
   },
   itemCard: {
     backgroundColor: '#FFFFFF',
@@ -1523,104 +1340,5 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 18,
-    marginBottom: 14,
-  },
-  emptyAddBtn: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#973c00',
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 10,
-  },
-  emptyAddBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 36,
-    maxHeight: '85%',
-  },
-  modalDragBar: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#CBD5E1',
-    alignSelf: 'center',
-    marginBottom: 12,
-  },
-  modalTopRow: {
-    flexDirection: rtlFlexDirection,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalHeading: {
-    fontSize: 16.5,
-    fontWeight: '800',
-    color: '#0F172A',
-    textAlign: rtlTextAlign,
-  },
-  modalCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inputLabel: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#334155',
-    textAlign: rtlTextAlign,
-    marginBottom: 6,
-    marginTop: 10,
-  },
-  star: {
-    color: '#DC2626',
-  },
-  inputField: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 12,
-    height: 44,
-    fontSize: 13,
-    color: '#0F172A',
-  },
-  textAreaField: {
-    height: 72,
-    paddingTop: 8,
-    textAlignVertical: 'top',
-  },
-  submitBtn: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#973c00',
-    borderRadius: 12,
-    height: 46,
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  submitBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
   },
 });
