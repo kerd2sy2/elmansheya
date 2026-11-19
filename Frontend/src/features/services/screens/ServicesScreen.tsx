@@ -18,11 +18,7 @@ import {
 import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
 import { fetchModuleData } from '@/core/api-client/apiClient';
 import { WidgetErrorBoundary } from '@/core/error-boundary/WidgetErrorBoundary';
-import {
-  CATEGORY_THEMES,
-  DEFAULT_CATEGORY_THEME,
-  ServiceCategoryGridCard,
-} from '../components/ServiceCategoryGridCard';
+import { ServiceCategoryGridCard } from '../components/ServiceCategoryGridCard';
 import {
   ServiceCategoryItem,
   ServiceDetailItem,
@@ -811,16 +807,6 @@ export function ServicesScreen() {
     );
   }, [allServices, selectedCategory, selectedSubCategory]);
 
-  // هوية ألوان القسم المختار
-  const catTheme = useMemo(() => {
-    if (!selectedCategory) return DEFAULT_CATEGORY_THEME;
-    return (
-      CATEGORY_THEMES[selectedCategory.slug] ||
-      CATEGORY_THEMES[selectedCategory.id] ||
-      DEFAULT_CATEGORY_THEME
-    );
-  }, [selectedCategory]);
-
   /* ========================================================
      إدارة زر الرجوع الفيزيائي بالهاتف (Hardware Back Button)
      خطوة واحدة دائماً:
@@ -868,20 +854,16 @@ export function ServicesScreen() {
                 />
               </Pressable>
 
-              {/* عنوان الخدمة الفرعية مع الأيقونة الملونة */}
+              {/* عنوان الخدمة الفرعية مع الأيقونة المعتمدة بثيم المنشية */}
               <View style={styles.subPageTitleBlock}>
-                <View
-                  style={[
-                    styles.headerIconBadge,
-                    { backgroundColor: catTheme.iconBg },
-                  ]}>
+                <View style={styles.headerIconBadge}>
                   <Ionicons
                     name={
                       (selectedSubCategory.icon ||
                         'checkmark-circle-outline') as keyof typeof Ionicons.glyphMap
                     }
                     size={22}
-                    color={catTheme.primary}
+                    color="#973c00"
                   />
                 </View>
                 <Text style={styles.subPageMainTitle}>
@@ -911,7 +893,7 @@ export function ServicesScreen() {
 
               {loadingItems && filteredServices.length === 0 ? (
                 <View style={styles.loadingBox}>
-                  <ActivityIndicator size="small" color={catTheme.primary} />
+                  <ActivityIndicator size="small" color="#973c00" />
                   <Text style={styles.loadingText}>جاري تحميل البيانات...</Text>
                 </View>
               ) : filteredServices.length === 0 ? (
@@ -935,23 +917,13 @@ export function ServicesScreen() {
                         <Text style={styles.itemDesc}>{it.description}</Text>
                       ) : null}
 
-                      {/* زر الاتصال السريع المباشر بمحاذاة اليمين */}
+                      {/* زر الاتصال السريع المباشر بثيم المنشية */}
                       {it.phone ? (
                         <Pressable
-                          style={[
-                            styles.callRow,
-                            {
-                              backgroundColor: catTheme.bgTint,
-                              borderColor: catTheme.border,
-                            },
-                          ]}
+                          style={styles.callRow}
                           onPress={() => Linking.openURL(`tel:${it.phone}`)}>
-                          <Ionicons name="call" size={14} color={catTheme.primary} />
-                          <Text
-                            style={[
-                              styles.phoneText,
-                              { color: catTheme.primary },
-                            ]}>
+                          <Ionicons name="call" size={14} color="#973c00" />
+                          <Text style={styles.phoneText}>
                             اتصال مباشر ({it.phone})
                           </Text>
                         </Pressable>
@@ -983,7 +955,7 @@ export function ServicesScreen() {
         /* ========================================================
            المستوى الأول: صفحة القسم المختار (طبي، مواصلات، مناسبات، مدارس...)
            الكروت تظهر في صف لوحدها (Full-width Row) بدون أرقام وبدون خط فاصل في الهيدر
-           وبدون تكرار عنوان أو براجراف وبمحاذاة يمنية عربية أصيلة
+           وبدون تكرار عنوان أو براجراف وبمحاذاة يمنية عربية وثيم المنشية المعتمد
            ======================================================== */
         <View style={styles.tabContainer}>
           <View style={styles.subPageFixedHeader}>
@@ -1001,20 +973,16 @@ export function ServicesScreen() {
                 />
               </Pressable>
 
-              {/* عنوان القسم الرئيسي مع الأيقونة الملونة فقط وبدون نصوص مكررة */}
+              {/* عنوان القسم الرئيسي مع أيقونة ثيم المنشية فقط وبدون نصوص مكررة */}
               <View style={styles.subPageTitleBlock}>
-                <View
-                  style={[
-                    styles.headerIconBadge,
-                    { backgroundColor: catTheme.iconBg },
-                  ]}>
+                <View style={styles.headerIconBadge}>
                   <Ionicons
                     name={
                       (selectedCategory.icon ||
                         'grid-outline') as keyof typeof Ionicons.glyphMap
                     }
                     size={22}
-                    color={catTheme.primary}
+                    color="#973c00"
                   />
                 </View>
                 <Text style={styles.subPageMainTitle}>
@@ -1043,23 +1011,18 @@ export function ServicesScreen() {
                     key={sub.id}
                     style={({ pressed }) => [
                       styles.subCategoryRowCard,
-                      { borderColor: catTheme.border },
-                      pressed && { backgroundColor: catTheme.bgTint },
+                      pressed && styles.subCategoryRowCardPressed,
                     ]}
                     onPress={() => setSelectedSubCategory(sub)}>
                     <View style={styles.subCategoryRowRight}>
-                      <View
-                        style={[
-                          styles.subCategoryRowIconBox,
-                          { backgroundColor: catTheme.iconBg },
-                        ]}>
+                      <View style={styles.subCategoryRowIconBox}>
                         <Ionicons
                           name={
                             (sub.icon ||
                               'checkmark-circle-outline') as keyof typeof Ionicons.glyphMap
                           }
                           size={24}
-                          color={catTheme.primary}
+                          color="#973c00"
                         />
                       </View>
                       <View style={styles.subCategoryRowTexts}>
@@ -1073,15 +1036,11 @@ export function ServicesScreen() {
                         </Text>
                       </View>
                     </View>
-                    <View
-                      style={[
-                        styles.subCategoryArrowBox,
-                        { backgroundColor: catTheme.bgTint },
-                      ]}>
+                    <View style={styles.subCategoryArrowBox}>
                       <Ionicons
                         name="chevron-back"
                         size={18}
-                        color={catTheme.primary}
+                        color="#973c00"
                       />
                     </View>
                   </Pressable>
@@ -1188,6 +1147,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1203,15 +1165,6 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
-  },
-  subPageDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 3,
-    marginRight: 48,
-    textAlign: rtlTextAlign,
-    writingDirection: 'rtl',
-    lineHeight: 18,
   },
   grid: {
     flexDirection: rtlFlexDirection,
@@ -1230,7 +1183,7 @@ const styles = StyleSheet.create({
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
   },
-  // قائمة الكروت الفرعية بحيث يظهر كل كرت في صف لوحده ممتد وأنيق
+  // قائمة الكروت الفرعية بحيث يظهر كل كرت في صف لوحده ممتد وأنيق بثيم المنشية
   subCategoriesList: {
     gap: 12,
     marginBottom: 16,
@@ -1241,16 +1194,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderWidth: 1.5,
-    minHeight: 88,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    minHeight: 84,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 5,
+  },
+  subCategoryRowCardPressed: {
+    backgroundColor: '#FFF7ED',
+    borderColor: '#FED7AA',
   },
   subCategoryRowRight: {
     flexDirection: rtlFlexDirection,
@@ -1259,9 +1217,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   subCategoryRowIconBox: {
-    width: 50,
-    height: 50,
+    width: 48,
+    height: 48,
     borderRadius: 14,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1271,7 +1232,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   subCategoryRowTitle: {
-    fontSize: 16.5,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
     textAlign: rtlTextAlign,
@@ -1287,9 +1248,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   subCategoryArrowBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFF7ED',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1309,16 +1271,16 @@ const styles = StyleSheet.create({
   },
   itemCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 16,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#E2E8F0',
     alignItems: 'stretch',
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 5,
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
   },
   cardHeaderRow: {
     flexDirection: rtlFlexDirection,
@@ -1347,15 +1309,18 @@ const styles = StyleSheet.create({
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
     gap: 8,
+    backgroundColor: '#FFF7ED',
+    borderColor: '#FED7AA',
+    borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 12,
     marginBottom: 8,
     alignSelf: 'flex-end',
-    borderWidth: 1,
   },
   phoneText: {
     fontSize: 13,
+    color: '#973c00',
     fontWeight: '800',
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
