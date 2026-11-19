@@ -31,6 +31,10 @@
         "projectId": "841df394-ebd6-4782-a548-d0495bf8dc76"
       }
     },
+    "notification": {
+      "icon": "./assets/images/notification-icon.png",
+      "color": "#973c00"
+    },
     "ios": {
       "icon": "./assets/images/icon.png"
     },
@@ -92,7 +96,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/icon.png",
+          "icon": "./assets/images/notification-icon.png",
           "color": "#973c00",
           "defaultChannel": "elmansheya_alerts_v2"
         }

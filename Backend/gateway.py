@@ -312,7 +312,8 @@ def _send_fcm_v1_message(access_tok, project_id, target_key, target_val, title, 
                     'default_vibrate_timings': True,
                     'default_light_settings': True,
                     'sound': 'default',
-                    'color': '#973c00'
+                    'color': '#973c00',
+                    'icon': 'notification_icon'
                 },
             },
         }

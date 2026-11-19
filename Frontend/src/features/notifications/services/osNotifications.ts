@@ -170,7 +170,7 @@ export async function presentOsStatusBarNotification(
         sound: true,
         vibrate: [0, 250, 250, 250],
         priority: 'max',
-        color: '#973C00',
+        color: '#973c00',
         data: {
           id: item.id,
           section: item.section,
