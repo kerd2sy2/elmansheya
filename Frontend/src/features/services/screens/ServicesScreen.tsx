@@ -18,7 +18,11 @@ import {
 import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
 import { fetchModuleData } from '@/core/api-client/apiClient';
 import { WidgetErrorBoundary } from '@/core/error-boundary/WidgetErrorBoundary';
-import { ServiceCategoryGridCard } from '../components/ServiceCategoryGridCard';
+import {
+  CATEGORY_THEMES,
+  DEFAULT_CATEGORY_THEME,
+  ServiceCategoryGridCard,
+} from '../components/ServiceCategoryGridCard';
 import {
   ServiceCategoryItem,
   ServiceDetailItem,
@@ -807,6 +811,16 @@ export function ServicesScreen() {
     );
   }, [allServices, selectedCategory, selectedSubCategory]);
 
+  // هوية ألوان القسم المختار
+  const catTheme = useMemo(() => {
+    if (!selectedCategory) return DEFAULT_CATEGORY_THEME;
+    return (
+      CATEGORY_THEMES[selectedCategory.slug] ||
+      CATEGORY_THEMES[selectedCategory.id] ||
+      DEFAULT_CATEGORY_THEME
+    );
+  }, [selectedCategory]);
+
   /* ========================================================
      إدارة زر الرجوع الفيزيائي بالهاتف (Hardware Back Button)
      خطوة واحدة دائماً:
@@ -854,22 +868,27 @@ export function ServicesScreen() {
                 />
               </Pressable>
 
-              {/* عنوان الخدمة الفرعية مع الأيقونة بجانبه مباشرة */}
+              {/* عنوان الخدمة الفرعية مع الأيقونة الملونة */}
               <View style={styles.subPageTitleBlock}>
-                <Ionicons
-                  name={
-                    (selectedSubCategory.icon ||
-                      'checkmark-circle-outline') as keyof typeof Ionicons.glyphMap
-                  }
-                  size={22}
-                  color="#973c00"
-                />
+                <View
+                  style={[
+                    styles.headerIconBadge,
+                    { backgroundColor: catTheme.iconBg },
+                  ]}>
+                  <Ionicons
+                    name={
+                      (selectedSubCategory.icon ||
+                        'checkmark-circle-outline') as keyof typeof Ionicons.glyphMap
+                    }
+                    size={22}
+                    color={catTheme.primary}
+                  />
+                </View>
                 <Text style={styles.subPageMainTitle}>
                   {selectedSubCategory.name_ar}
                 </Text>
               </View>
             </View>
-            <Text style={styles.subPageDesc}>{selectedSubCategory.description}</Text>
           </View>
 
           <ScrollView
@@ -892,7 +911,7 @@ export function ServicesScreen() {
 
               {loadingItems && filteredServices.length === 0 ? (
                 <View style={styles.loadingBox}>
-                  <ActivityIndicator size="small" color="#973c00" />
+                  <ActivityIndicator size="small" color={catTheme.primary} />
                   <Text style={styles.loadingText}>جاري تحميل البيانات...</Text>
                 </View>
               ) : filteredServices.length === 0 ? (
@@ -916,13 +935,25 @@ export function ServicesScreen() {
                         <Text style={styles.itemDesc}>{it.description}</Text>
                       ) : null}
 
-                      {/* زر الاتصال السريع المباشر */}
+                      {/* زر الاتصال السريع المباشر بمحاذاة اليمين */}
                       {it.phone ? (
                         <Pressable
-                          style={styles.callRow}
+                          style={[
+                            styles.callRow,
+                            {
+                              backgroundColor: catTheme.bgTint,
+                              borderColor: catTheme.border,
+                            },
+                          ]}
                           onPress={() => Linking.openURL(`tel:${it.phone}`)}>
-                          <Ionicons name="call" size={14} color="#973c00" />
-                          <Text style={styles.phoneText}>اتصال مباشر ({it.phone})</Text>
+                          <Ionicons name="call" size={14} color={catTheme.primary} />
+                          <Text
+                            style={[
+                              styles.phoneText,
+                              { color: catTheme.primary },
+                            ]}>
+                            اتصال مباشر ({it.phone})
+                          </Text>
                         </Pressable>
                       ) : null}
 
@@ -952,6 +983,7 @@ export function ServicesScreen() {
         /* ========================================================
            المستوى الأول: صفحة القسم المختار (طبي، مواصلات، مناسبات، مدارس...)
            الكروت تظهر في صف لوحدها (Full-width Row) بدون أرقام وبدون خط فاصل في الهيدر
+           وبدون تكرار عنوان أو براجراف وبمحاذاة يمنية عربية أصيلة
            ======================================================== */
         <View style={styles.tabContainer}>
           <View style={styles.subPageFixedHeader}>
@@ -969,22 +1001,27 @@ export function ServicesScreen() {
                 />
               </Pressable>
 
-              {/* عنوان القسم الرئيسي مع الأيقونة */}
+              {/* عنوان القسم الرئيسي مع الأيقونة الملونة فقط وبدون نصوص مكررة */}
               <View style={styles.subPageTitleBlock}>
-                <Ionicons
-                  name={
-                    (selectedCategory.icon ||
-                      'grid-outline') as keyof typeof Ionicons.glyphMap
-                  }
-                  size={22}
-                  color="#973c00"
-                />
+                <View
+                  style={[
+                    styles.headerIconBadge,
+                    { backgroundColor: catTheme.iconBg },
+                  ]}>
+                  <Ionicons
+                    name={
+                      (selectedCategory.icon ||
+                        'grid-outline') as keyof typeof Ionicons.glyphMap
+                    }
+                    size={22}
+                    color={catTheme.primary}
+                  />
+                </View>
                 <Text style={styles.subPageMainTitle}>
                   {selectedCategory.name_ar}
                 </Text>
               </View>
             </View>
-            <Text style={styles.subPageDesc}>{selectedCategory.description}</Text>
           </View>
 
           <ScrollView
@@ -999,43 +1036,54 @@ export function ServicesScreen() {
             directionalLockEnabled={false}
             overScrollMode="always">
             <WidgetErrorBoundary widgetNameAr="كروت الخدمات الفرعية في صف لوحدها">
-              <View style={styles.detailsHeaderRow}>
-                <Text style={styles.detailsTitle}>
-                  اختر الخدمة المطلوبة
-                </Text>
-              </View>
-
-              {/* كل كرت يظهر في صف لوحده ممتد بالكامل بنمط أنيق */}
+              {/* كل كرت يظهر في صف لوحده ممتد بالكامل بنمط أنيق بدون عناوين مكررة */}
               <View style={styles.subCategoriesList}>
                 {selectedCategory.subcategories.map((sub) => (
                   <Pressable
                     key={sub.id}
                     style={({ pressed }) => [
                       styles.subCategoryRowCard,
-                      pressed && styles.subCategoryRowCardPressed,
+                      { borderColor: catTheme.border },
+                      pressed && { backgroundColor: catTheme.bgTint },
                     ]}
                     onPress={() => setSelectedSubCategory(sub)}>
                     <View style={styles.subCategoryRowRight}>
-                      <View style={styles.subCategoryRowIconBox}>
+                      <View
+                        style={[
+                          styles.subCategoryRowIconBox,
+                          { backgroundColor: catTheme.iconBg },
+                        ]}>
                         <Ionicons
                           name={
                             (sub.icon ||
                               'checkmark-circle-outline') as keyof typeof Ionicons.glyphMap
                           }
-                          size={22}
-                          color="#973c00"
+                          size={24}
+                          color={catTheme.primary}
                         />
                       </View>
                       <View style={styles.subCategoryRowTexts}>
                         <Text style={styles.subCategoryRowTitle}>
                           {sub.name_ar}
                         </Text>
-                        <Text style={styles.subCategoryRowDesc} numberOfLines={2}>
+                        <Text
+                          style={styles.subCategoryRowDesc}
+                          numberOfLines={2}>
                           {sub.description}
                         </Text>
                       </View>
                     </View>
-                    <Ionicons name="chevron-back" size={20} color="#94A3B8" />
+                    <View
+                      style={[
+                        styles.subCategoryArrowBox,
+                        { backgroundColor: catTheme.bgTint },
+                      ]}>
+                      <Ionicons
+                        name="chevron-back"
+                        size={18}
+                        color={catTheme.primary}
+                      />
+                    </View>
                   </Pressable>
                 ))}
               </View>
@@ -1136,15 +1184,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   subPageTitleBlock: {
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     flex: 1,
   },
   subPageMainTitle: {
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#0F172A',
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
@@ -1165,62 +1220,58 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   detailsHeaderRow: {
-    marginBottom: 10,
-    marginTop: 4,
+    marginBottom: 12,
+    marginTop: 6,
   },
   detailsTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0F172A',
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
   },
-  // قائمة الكروت الفرعية بحيث يظهر كل كرت في صف لوحده
+  // قائمة الكروت الفرعية بحيث يظهر كل كرت في صف لوحده ممتد وأنيق
   subCategoriesList: {
-    gap: 10,
+    gap: 12,
     marginBottom: 16,
+    marginTop: 4,
   },
   subCategoryRowCard: {
     flexDirection: rtlFlexDirection,
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 14,
+    borderRadius: 18,
+    paddingHorizontal: 16,
     paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    elevation: 1,
+    borderWidth: 1.5,
+    minHeight: 88,
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-  },
-  subCategoryRowCardPressed: {
-    backgroundColor: '#FFF7ED',
-    borderColor: '#FED7AA',
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
   },
   subCategoryRowRight: {
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
     flex: 1,
   },
   subCategoryRowIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#FFF7ED',
+    width: 50,
+    height: 50,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   subCategoryRowTexts: {
     flex: 1,
-    gap: 2,
-    alignItems: 'flex-start',
+    gap: 3,
+    alignItems: 'flex-end',
   },
   subCategoryRowTitle: {
-    fontSize: 15.5,
+    fontSize: 16.5,
     fontWeight: '800',
     color: '#0F172A',
     textAlign: rtlTextAlign,
@@ -1228,12 +1279,19 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   subCategoryRowDesc: {
-    fontSize: 12,
+    fontSize: 12.5,
     color: '#64748B',
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
-    lineHeight: 17,
+    lineHeight: 18,
     width: '100%',
+  },
+  subCategoryArrowBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loadingBox: {
     alignItems: 'center',
@@ -1247,29 +1305,29 @@ const styles = StyleSheet.create({
     textAlign: rtlTextAlign,
   },
   itemsList: {
-    gap: 10,
+    gap: 12,
   },
   itemCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
     alignItems: 'stretch',
-    elevation: 1,
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 4,
+    shadowRadius: 5,
   },
   cardHeaderRow: {
     flexDirection: rtlFlexDirection,
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   itemTitle: {
-    fontSize: 15.5,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
     textAlign: rtlTextAlign,
@@ -1282,25 +1340,22 @@ const styles = StyleSheet.create({
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
     lineHeight: 20,
-    marginBottom: 8,
+    marginBottom: 10,
     width: '100%',
   },
   callRow: {
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFF7ED',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    marginBottom: 6,
-    alignSelf: 'flex-start',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginBottom: 8,
+    alignSelf: 'flex-end',
     borderWidth: 1,
-    borderColor: '#FED7AA',
   },
   phoneText: {
-    fontSize: 12.5,
-    color: '#973c00',
+    fontSize: 13,
     fontWeight: '800',
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
@@ -1309,11 +1364,11 @@ const styles = StyleSheet.create({
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
     gap: 6,
-    marginTop: 4,
-    alignSelf: 'flex-start',
+    marginTop: 5,
+    alignSelf: 'flex-end',
   },
   metaText: {
-    fontSize: 12,
+    fontSize: 12.5,
     color: '#64748B',
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
