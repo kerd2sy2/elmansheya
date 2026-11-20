@@ -160,47 +160,73 @@ export function ProfileScreen() {
       if (!resp.ok) return;
       const json = await resp.json();
       if (json.success && Array.isArray(json.data)) {
-        const mapped: MyReportItem[] = json.data.map((r: any) => ({
-          id: String(r.id),
-          reportNumber: Number(r.id),
-          typeAr: r.report_type_ar || 'بلاغ',
-          title: r.title,
-          address: r.manual_address || 'قرية المنشية',
-          status: r.status,
-          statusAr: r.status_ar || 'قيد المتابعة',
-          createdAtAr: r.created_at
-            ? new Date(r.created_at).toLocaleDateString('ar-EG', {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })
-            : 'الآن',
-          resolutionSummary: r.resolution_summary,
-          steps: generateTimelineSteps(
-            r.status,
-            r.created_at
-              ? new Date(r.created_at).toLocaleDateString('ar-EG', {
-                  month: 'short',
-                  day: 'numeric',
-                })
-              : 'الآن',
-            r.resolution_summary
-          ),
-        }));
+        const mapped: MyReportItem[] = json.data
+          .filter((r: any) => Boolean(r && (r.id || r.report_number)))
+          .map((r: any) => {
+            const rawNum = r.report_number ?? r.reportNumber;
+            const parsedNum = typeof rawNum === 'number' ? rawNum : parseInt(String(rawNum || '').replace(/\D/g, ''), 10);
+            const repNum = !isNaN(parsedNum) && parsedNum > 0 ? parsedNum : 1;
+            const repId = String(r.id || `rep-${repNum}`);
+            const status = r.status || 'pending_approval';
+            const statusAr = r.status_ar || 'قيد المتابعة';
+            const typeAr = r.report_type_ar || r.typeAr || 'بلاغ';
+            const title = typeof r.title === 'string' ? r.title : '';
+            const address = typeof r.manual_address === 'string' ? r.manual_address : (typeof r.address === 'string' ? r.address : 'قرية المنشية');
+
+            let createdAtAr = 'الآن';
+            if (r.created_at) {
+              try {
+                const cleanDate = String(r.created_at).replace(/(\.\d{3})\d+Z$/, '$1Z');
+                const d = new Date(cleanDate);
+                if (!isNaN(d.getTime())) {
+                  createdAtAr = d.toLocaleDateString('ar-EG', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  });
+                }
+              } catch {
+                createdAtAr = 'الآن';
+              }
+            }
+
+            return {
+              id: repId,
+              reportNumber: repNum,
+              typeAr,
+              title,
+              address,
+              status,
+              statusAr,
+              createdAtAr,
+              resolutionSummary: r.resolution_summary,
+              steps: generateTimelineSteps(
+                status,
+                createdAtAr,
+                r.resolution_summary
+              ),
+            };
+          });
 
         const local = await getMyReports(userKey);
         const map = new Map<string, MyReportItem>();
-        mapped.forEach((rep) => map.set(String(rep.reportNumber || rep.id), rep));
-        local.forEach((rep) => {
-          const key = String(rep.reportNumber || rep.id);
-          if (!map.has(key)) {
-            map.set(key, rep);
+        mapped.forEach((rep) => {
+          if (rep && (rep.id || rep.reportNumber)) {
+            map.set(String(rep.reportNumber || rep.id), rep);
+          }
+        });
+        (Array.isArray(local) ? local : []).forEach((rep) => {
+          if (rep && (rep.id || rep.reportNumber)) {
+            const key = String(rep.reportNumber || rep.id);
+            if (!map.has(key)) {
+              map.set(key, rep);
+            }
           }
         });
 
         const finalReports = Array.from(map.values()).sort(
-          (a, b) => (b.reportNumber || 0) - (a.reportNumber || 0)
+          (a, b) => (Number(b.reportNumber) || 0) - (Number(a.reportNumber) || 0)
         );
 
         setMyReports(finalReports);
