@@ -29,3 +29,7 @@ firebase-service-account.json
 .DS_Store
 Thumbs.db
 *.log
+
+# Python
+__pycache__/
+*.pyc
