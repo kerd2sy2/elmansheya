@@ -146,13 +146,8 @@ async function resolveWhatsAppUser(rawPhone) {
  * صياغة رسالة رمز التحقق مع هاش فريد لمنع الحظر
  */
 function buildAntiBanOtpMessage(code) {
-    const formattedCode = "*`" + code + "`*";
-    const hashId = `#${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-
-    return `رمز التحقق الخاص بك هو ${formattedCode}\n` +
-           `لا تشارك هذا الكود\n\n` +
-           `التطبيق مجاني بالكامل نكتب هذا الهاش (${hashId})\n` +
-           `كي لا يتم حظر الرقم`;
+    const hashId = crypto.randomInt(1000000000, 10000000000);
+    return `رمز التحقق الخاص بك هو : *${code}*\n\nID: #${hashId}`;
 }
 
 async function sendAntiBanOtpToJid(targetJid, code) {
