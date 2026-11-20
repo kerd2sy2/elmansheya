@@ -7,6 +7,9 @@
       "developmentClient": true,
       "distribution": "internal",
       "channel": "almuwatin",
+      "env": {
+        "EXPO_PUBLIC_USE_RN_FETCH": "1"
+      },
       "android": {
         "buildType": "apk"
       }
@@ -14,12 +17,18 @@
     "preview": {
       "distribution": "internal",
       "channel": "almuwatin",
+      "env": {
+        "EXPO_PUBLIC_USE_RN_FETCH": "1"
+      },
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
       "channel": "almuwatin",
+      "env": {
+        "EXPO_PUBLIC_USE_RN_FETCH": "1"
+      },
       "android": {
         "buildType": "apk"
       }

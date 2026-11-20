@@ -120,6 +120,7 @@ interface MediaAttachment {
   uri: string;
   type: 'image' | 'video';
   fileName?: string;
+  base64?: string | null;
 }
 
 export function ReportsScreen() {
@@ -205,6 +206,7 @@ export function ReportsScreen() {
         mediaTypes: ['images', 'videos'],
         allowsMultipleSelection: true,
         quality: 0.7,
+        base64: true,
       });
       if (!res.canceled && res.assets && res.assets.length > 0) {
         const newItems: MediaAttachment[] = res.assets.map((asset, index) => ({
@@ -212,6 +214,7 @@ export function ReportsScreen() {
           uri: asset.uri,
           type: asset.type === 'video' ? 'video' : 'image',
           fileName: asset.fileName ?? undefined,
+          base64: asset.base64 ?? null,
         }));
         setMediaList((prev) => [...prev, ...newItems]);
       }
@@ -285,6 +288,7 @@ export function ReportsScreen() {
               section: 'reports',
               mediaType: item.type,
               fileName: item.fileName,
+              base64: item.base64,
             })
           )
         );

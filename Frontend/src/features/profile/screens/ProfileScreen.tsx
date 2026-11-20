@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useFocusEffect } from 'expo-router';
@@ -7,8 +8,8 @@ import {
   Alert,
   Animated,
   BackHandler,
-  Image,
   Pressable,
+  ScrollView,
   Switch,
   Text,
   View,
@@ -56,6 +57,7 @@ export function ProfileScreen() {
   } = useAuth();
 
   const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef<any>(null);
 
   // إعداد تشغيل الفيديو التلقائي على شبكات Wi-Fi فقط
   const [autoPlayOnWifi, setAutoPlayOnWifi] = useState<boolean>(true);
@@ -79,6 +81,21 @@ export function ProfileScreen() {
   const [showChangePasswordSheet, setShowChangePasswordSheet] = useState<boolean>(false);
   const [showMyReportsPage, setShowMyReportsPage] = useState<boolean>(false);
   const [showUpdatesModal, setShowUpdatesModal] = useState<boolean>(false);
+
+  // إغلاق صفحة بلاغاتي مع تصفير الإحداثيات فورياً لضمان ظهور الأفاتار
+  const handleCloseMyReports = useCallback(() => {
+    scrollY.setValue(0);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+    setShowMyReportsPage(false);
+  }, [scrollY]);
+
+  // ضمان بقاء الأفاتار ظاهراً وعدم اختفائه عند العودة للملف الشخصي
+  useEffect(() => {
+    if (!showMyReportsPage) {
+      scrollY.setValue(0);
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+    }
+  }, [showMyReportsPage, scrollY]);
 
   // بلاغات المستخدم
   const [myReports, setMyReports] = useState<MyReportItem[]>([]);
@@ -119,7 +136,7 @@ export function ProfileScreen() {
         return true;
       }
       if (showMyReportsPage) {
-        setShowMyReportsPage(false);
+        handleCloseMyReports();
         return true;
       }
       return false;
@@ -129,6 +146,7 @@ export function ProfileScreen() {
     return () => sub.remove();
   }, [
     showMyReportsPage,
+    handleCloseMyReports,
     showChangePasswordSheet,
     showUpdatesModal,
     showFullImageModal,
@@ -412,7 +430,7 @@ export function ProfileScreen() {
     return (
       <MyReportsView
         reports={myReports}
-        onBack={() => setShowMyReportsPage(false)}
+        onBack={handleCloseMyReports}
         topInset={topInset}
         bottomTabPadding={bottomTabPadding}
       />
@@ -442,6 +460,7 @@ export function ProfileScreen() {
       </Animated.View>
 
       <Animated.ScrollView
+        ref={scrollRef}
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: bottomTabPadding },
@@ -474,7 +493,13 @@ export function ProfileScreen() {
               onPress={() => setShowFullImageModal(true)}
               style={styles.avatarCircle}>
               {getDirectImageUrl(user.avatar_url) ? (
-                <Image source={{ uri: getDirectImageUrl(user.avatar_url)! }} style={styles.avatarImg} />
+                <Image
+                  source={{ uri: getDirectImageUrl(user.avatar_url)! }}
+                  style={styles.avatarImg}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  transition={150}
+                />
               ) : (
                 <View style={styles.initialsBox}>
                   <Text style={styles.initialsText}>{initials}</Text>
