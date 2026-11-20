@@ -39,7 +39,8 @@ export const MyReportsView: React.FC<MyReportsViewProps> = ({
       if (rNum > 0) seenNums.add(rNum);
       list.push(r);
     }
-    return list;
+    // ترتيب البلاغات تصاعدياً حسب رقم البلاغ/الوقت (سواء تم حلها أو لا)
+    return list.sort((a, b) => (Number(a.reportNumber) || 0) - (Number(b.reportNumber) || 0));
   }, [reports]);
 
   return (

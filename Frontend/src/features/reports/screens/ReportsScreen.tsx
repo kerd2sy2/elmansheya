@@ -144,11 +144,15 @@ export function ReportsScreen() {
   const [submittedReportNumber, setSubmittedReportNumber] = useState<number | null>(null);
   const [trackingReport, setTrackingReport] = useState<ReportTrackingModalData | null>(null);
 
-  // ترتيب البلاغات تنازلياً من الأحدث للأقدم
+  // ترتيب البلاغات: البلاغات النشطة أولاً، والبلاغات التي تم حلها دائماً بالأسفل في الآخر
   const sortedReports = useMemo(() => {
-    return [...reports].sort(
-      (a, b) => (b.report_number || 0) - (a.report_number || 0)
-    );
+    return [...reports].sort((a, b) => {
+      const aResolved = a.status === 'resolved';
+      const bResolved = b.status === 'resolved';
+      if (aResolved && !bResolved) return 1;
+      if (!aResolved && bResolved) return -1;
+      return (b.report_number || 0) - (a.report_number || 0);
+    });
   }, [reports]);
 
   const handleOpenTracking = (rep: PublicReportItem) => {

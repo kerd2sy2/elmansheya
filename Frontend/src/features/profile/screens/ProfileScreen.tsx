@@ -246,8 +246,9 @@ export function ProfileScreen() {
           deduplicated.push(rep);
         }
 
+        // ترتيب تصاعدي حسب رقم البلاغ/الوقت
         const finalReports = deduplicated.sort(
-          (a, b) => (Number(b.reportNumber) || 0) - (Number(a.reportNumber) || 0)
+          (a, b) => (Number(a.reportNumber) || 0) - (Number(b.reportNumber) || 0)
         );
 
         setMyReports(finalReports);

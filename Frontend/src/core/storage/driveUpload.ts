@@ -52,32 +52,11 @@ export async function uploadMediaToDrive({
     const formData = new FormData();
     const mimeType = mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
 
-    let appended = false;
-
-    // في Expo SDK 52، يدعم fetch(uri).blob() تحويل مسار الملف المحلي إلى Blob متوافق مع FormDataPart
-    try {
-      const blobResp = await fetch(uri);
-      if (blobResp && typeof (blobResp as any).blob === 'function') {
-        const blob = await blobResp.blob();
-        formData.append('file', blob, cleanName);
-        appended = true;
-      }
-    } catch {
-      appended = false;
-    }
-
-    // إذا لم ينجح الـ blob، نستخدم كائن الملف القياسي لـ React Native
-    if (!appended) {
-      try {
-        formData.append('file', {
-          uri,
-          name: cleanName,
-          type: mimeType,
-        } as any);
-      } catch (appendErr: any) {
-        throw new Error(appendErr?.message || 'تعذر معالجة المرفق للرفع');
-      }
-    }
+    formData.append('file', {
+      uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
+      name: cleanName,
+      type: mimeType,
+    } as any);
 
     formData.append('section', section);
     formData.append('media_type', mediaType);

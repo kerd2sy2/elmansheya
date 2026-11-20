@@ -64,11 +64,6 @@ export function PublicReportCard({ item, onPress }: PublicReportCardProps) {
             <Ionicons name={category.icon} size={15} color={category.color} />
           </View>
           <Text style={styles.categoryTitleText}>{item.report_type_ar || 'بلاغ عام'}</Text>
-          <View style={styles.reportNumberBadge}>
-            <Text style={styles.reportNumberBadgeText}>
-              #{item.report_number || item.id?.slice(-4) || '—'}
-            </Text>
-          </View>
         </View>
 
         <View
@@ -203,17 +198,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#0F172A',
-  },
-  reportNumberBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  reportNumberBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#64748B',
   },
   statusBadge: {
     flexDirection: rtlFlexDirection,
