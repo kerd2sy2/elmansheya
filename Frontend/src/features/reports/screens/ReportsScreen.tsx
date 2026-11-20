@@ -271,115 +271,116 @@ export function ReportsScreen() {
     }
     if (isSubmitting) return;
 
-    setIsSubmitting(true);
+    // ١. حفظ وتجهيز البيانات فورياً
     const cleanTitle = title.trim();
     const cleanAddress = address.trim();
     const cleanDesc = description.trim() || 'تم إرسال البلاغ للمشرف المختص للمراجعة والمتابعة.';
     const userKey = user?.phone || user?.id || 'guest';
-    const fingerprint = await getCompositeDeviceFingerprint().catch(() => '');
+    const currentType = { ...selectedType };
+    const currentMediaList = [...mediaList];
 
-    let uploadedMediaUrl: string | undefined;
-    if (mediaList.length > 0) {
+    // رقم مؤقت فوري للبلاغ
+    const optimisticRepNum =
+      sortedReports.length > 0 && sortedReports[0].report_number
+        ? sortedReports[0].report_number + 1
+        : (Date.now() % 10000) + 1;
+    const tempRepId = `my-rep-${Date.now()}`;
+
+    // ٢. حفظ البلاغ محلياً فوراً في قائمة "بلاغاتي" لظهوره للمواطن في حسابه لحظياً
+    addMyReport(
+      {
+        id: tempRepId,
+        reportNumber: optimisticRepNum,
+        typeAr: currentType.cleanName,
+        title: cleanTitle,
+        address: cleanAddress,
+        status: 'pending_approval',
+        statusAr: 'قيد مراجعة المشرف',
+        createdAtAr: 'الآن',
+      },
+      userKey
+    ).catch(() => {});
+
+    // ٣. إفراغ الحقول وعرض شاشة نجاح الاستلام فوراً دون أي انتظار
+    setSubmittedReportNumber(optimisticRepNum);
+    setTitle('');
+    setDescription('');
+    setAddress('');
+    setMediaList([]);
+    setCurrentView('list');
+    setShowSuccessSheet(true);
+
+    // ٤. رفع المرفقات وحفظ البيانات في السيرفر وقاعدة البيانات في الخلفية بهدوء
+    (async () => {
       try {
-        const uploadedUrls = await Promise.all(
-          mediaList.map((item) =>
-            uploadMediaToDrive({
-              uri: item.uri,
-              section: 'reports',
-              mediaType: item.type,
-              fileName: item.fileName,
-              base64: item.base64,
-            })
-          )
-        );
-        const firstImageIdx = mediaList.findIndex((m) => m.type === 'image');
-        uploadedMediaUrl =
-          firstImageIdx >= 0 ? uploadedUrls[firstImageIdx] : uploadedUrls[0];
-      } catch (err: any) {
-        setIsSubmitting(false);
-        Alert.alert(
-          'تعذر رفع المرفق إلى Google Drive',
-          err?.message || 'تحقق من اتصال الإنترنت ثم أعد المحاولة.'
-        );
-        return;
+        let uploadedMediaUrl: string | undefined;
+        if (currentMediaList.length > 0) {
+          const uploadedUrls = await Promise.all(
+            currentMediaList.map((item) =>
+              uploadMediaToDrive({
+                uri: item.uri,
+                section: 'reports',
+                mediaType: item.type,
+                fileName: item.fileName,
+                base64: item.base64,
+              }).catch(() => '')
+            )
+          );
+          const validUrls = uploadedUrls.filter(Boolean);
+          if (validUrls.length > 0) {
+            const firstImageIdx = currentMediaList.findIndex((m) => m.type === 'image');
+            uploadedMediaUrl =
+              firstImageIdx >= 0 && uploadedUrls[firstImageIdx]
+                ? uploadedUrls[firstImageIdx]
+                : validUrls[0];
+          }
+        }
+
+        const fingerprint = await getCompositeDeviceFingerprint().catch(() => '');
+
+        const res = await fetch(`${API_BASE_URL}/reports/create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: user?.id || '',
+            user_phone: user?.phone || '',
+            user_name: user?.full_name || '',
+            device_fingerprint: fingerprint,
+            report_type: currentType.code,
+            report_type_ar: currentType.cleanName,
+            title: cleanTitle,
+            description: cleanDesc,
+            manual_address: cleanAddress,
+            image_url: uploadedMediaUrl,
+          }),
+        });
+
+        const json = await res.json().catch(() => null);
+        if (json?.data?.report_number) {
+          const finalRepNum = json.data.report_number;
+          setSubmittedReportNumber(finalRepNum);
+
+          // تحديث بيانات البلاغ في قائمة "بلاغاتي" بالرقم المعتمد من السيرفر
+          addMyReport(
+            {
+              id: json?.data?.id || tempRepId,
+              reportNumber: finalRepNum,
+              typeAr: currentType.cleanName,
+              title: cleanTitle,
+              address: cleanAddress,
+              status: 'pending_approval',
+              statusAr: 'قيد مراجعة المشرف',
+              createdAtAr: 'الآن',
+            },
+            userKey
+          ).catch(() => {});
+        }
+
+        await loadReports().catch(() => {});
+      } catch (bgErr) {
+        console.warn('[ReportsScreen] Background upload error:', bgErr);
       }
-    }
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/reports/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user?.id || '',
-          user_phone: user?.phone || '',
-          user_name: user?.full_name || '',
-          device_fingerprint: fingerprint,
-          report_type: selectedType.code,
-          report_type_ar: selectedType.cleanName,
-          title: cleanTitle,
-          description: cleanDesc,
-          manual_address: cleanAddress,
-          image_url: uploadedMediaUrl,
-        }),
-      });
-
-      const json = await res.json().catch(() => null);
-      const repNum = json?.data?.report_number || reports.length + 1;
-      const repId = json?.data?.id || `my-rep-${Date.now()}`;
-
-      // حفظ البلاغ في قائمة "بلاغاتي" المخصصة للمواطن نفسه فقط
-      await addMyReport(
-        {
-          id: repId,
-          reportNumber: repNum,
-          typeAr: selectedType.cleanName,
-          title: cleanTitle,
-          address: cleanAddress,
-          status: 'pending_approval',
-          statusAr: 'قيد مراجعة المشرف',
-          createdAtAr: 'الآن',
-        },
-        userKey
-      );
-
-      setSubmittedReportNumber(repNum);
-      setTitle('');
-      setDescription('');
-      setAddress('');
-      setMediaList([]);
-      setCurrentView('list');
-      setShowSuccessSheet(true);
-      // إعادة تحميل البلاغات المعتمدة فقط (البلاغ الجديد لا يظهر حتى يوافق عليه المشرف)
-      await loadReports();
-    } catch {
-      const repNum = reports.length + 1;
-      const repId = `my-rep-${Date.now()}`;
-
-      // حفظ البلاغ محلياً للمواطن حتى في حالة تعذر الاتصال
-      await addMyReport(
-        {
-          id: repId,
-          reportNumber: repNum,
-          typeAr: selectedType.cleanName,
-          title: cleanTitle,
-          address: cleanAddress,
-          status: 'pending_approval',
-          statusAr: 'قيد مراجعة المشرف',
-          createdAtAr: 'الآن',
-        },
-        userKey
-      );
-
-      setSubmittedReportNumber(repNum);
-      setTitle('');
-      setDescription('');
-      setAddress('');
-      setMediaList([]);
-      setCurrentView('list');
-      setShowSuccessSheet(true);
-    } finally {
-      setIsSubmitting(false);
-    }
+    })();
   };
 
   /* ========================================================
