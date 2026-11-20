@@ -777,12 +777,6 @@ export function ReportsScreen() {
         overScrollMode="always">
         {/* قائمة البلاغات العامة (10 بلاغات) */}
         <WidgetErrorBoundary widgetNameAr="البلاغات العامة للقرية">
-          <View style={styles.reportsHeaderInfo}>
-            <Text style={styles.sectionTitle}>
-              بلاغات القرية الأخيرة ({reports.length})
-            </Text>
-          </View>
-
           {sortedReports.length === 0 ? (
             <View style={styles.emptyBox}>
               <Ionicons name="megaphone-outline" size={34} color="#94A3B8" />
@@ -890,7 +884,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FAF5EE',
+    backgroundColor: 'transparent',
     borderBottomWidth: 0,
     zIndex: 10,
   },
@@ -922,16 +916,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 6,
     elevation: 4,
-  },
-  reportsHeaderInfo: {
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-    textAlign: rtlTextAlign,
-    writingDirection: 'rtl',
   },
   emptyBox: {
     backgroundColor: '#FFFFFF',

@@ -159,13 +159,13 @@ export function NewsDetailScreen({
       <View style={styles.topBar}>
         {onClose ? (
           <Pressable
-            style={styles.circleButton}
+            style={styles.backButtonClean}
             onPress={onClose}
-            hitSlop={8}
+            hitSlop={14}
             accessibilityLabel="رجوع">
             <Ionicons
               name={I18nManager.isRTL ? 'arrow-forward' : 'arrow-back'}
-              size={22}
+              size={24}
               color="#0F172A"
             />
           </Pressable>
@@ -336,9 +336,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#FAF5EE',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    backgroundColor: 'transparent',
+    borderBottomWidth: 0,
+  },
+  backButtonClean: {
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   circleButton: {
     width: 38,

@@ -854,18 +854,8 @@ export function ServicesScreen() {
                 />
               </Pressable>
 
-              {/* عنوان الخدمة الفرعية مع الأيقونة المعتمدة بثيم المنشية */}
+              {/* عنوان الخدمة الفرعية فقط بدون أيقونة */}
               <View style={styles.subPageTitleBlock}>
-                <View style={styles.headerIconBadge}>
-                  <Ionicons
-                    name={
-                      (selectedSubCategory.icon ||
-                        'checkmark-circle-outline') as keyof typeof Ionicons.glyphMap
-                    }
-                    size={22}
-                    color="#973c00"
-                  />
-                </View>
                 <Text style={styles.subPageMainTitle}>
                   {selectedSubCategory.name_ar}
                 </Text>
@@ -973,18 +963,8 @@ export function ServicesScreen() {
                 />
               </Pressable>
 
-              {/* عنوان القسم الرئيسي مع أيقونة ثيم المنشية فقط وبدون نصوص مكررة */}
+              {/* عنوان القسم الرئيسي فقط وبدون أيقونة */}
               <View style={styles.subPageTitleBlock}>
-                <View style={styles.headerIconBadge}>
-                  <Ionicons
-                    name={
-                      (selectedCategory.icon ||
-                        'grid-outline') as keyof typeof Ionicons.glyphMap
-                    }
-                    size={22}
-                    color="#973c00"
-                  />
-                </View>
                 <Text style={styles.subPageMainTitle}>
                   {selectedCategory.name_ar}
                 </Text>
@@ -1103,7 +1083,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FAF5EE',
+    backgroundColor: 'transparent',
     borderBottomWidth: 0,
     zIndex: 10,
   },
@@ -1124,9 +1104,9 @@ const styles = StyleSheet.create({
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
   },
-  // هيدر بدون أي خط فاصل مع الخلفية (#FAF5EE)
+  // هيدر بدون أي خط فاصل أو باجراوند
   subPageFixedHeader: {
-    backgroundColor: '#FAF5EE',
+    backgroundColor: 'transparent',
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 8,
@@ -1135,28 +1115,16 @@ const styles = StyleSheet.create({
   subPageHeaderRow: {
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   cleanBackArrowBtn: {
-    width: 38,
-    height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerIconBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1,
-    borderColor: '#FED7AA',
+    padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
   subPageTitleBlock: {
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
-    gap: 10,
     flex: 1,
   },
   subPageMainTitle: {

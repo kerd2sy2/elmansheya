@@ -526,49 +526,27 @@ export function CraftsmenScreen() {
           </View>
         </ScrollView>
       ) : selectedProfession ? (
-        /* ٢. صفحة الصنعة المختارة: هيدر حديث وراقي بثيم المنشية */
+        /* ٢. صفحة الصنعة المختارة: عنوان فقط وسهم رجوع بدون أي خلفية وبدون أيقونات أو براجراف */
         <View style={styles.tabContainer}>
           <View style={styles.subPageFixedHeader}>
             <View style={styles.subPageHeaderRow}>
-              {/* زر الرجوع الدائري الأنيق */}
+              {/* سهم الرجوع النظيف بدون أي خلفية */}
               <Pressable
                 style={styles.cleanBackArrowBtn}
                 onPress={() => setSelectedProfession(null)}
-                hitSlop={12}
+                hitSlop={14}
                 accessibilityLabel="رجوع لقائمة الصنائع">
                 <Ionicons
                   name="arrow-forward"
-                  size={22}
+                  size={24}
                   color="#0F172A"
                 />
               </Pressable>
 
-              {/* بادج أيقونة الصنعة */}
-              <View style={styles.headerIconBadge}>
-                <Ionicons
-                  name={
-                    (selectedProfession.icon_name ||
-                      'construct-outline') as keyof typeof Ionicons.glyphMap
-                  }
-                  size={22}
-                  color="#973c00"
-                />
-              </View>
-
-              {/* عنوان المهنة وعدد الصنايعية والوصف */}
+              {/* عنوان المهنة فقط بدون أيقونات وبدون براجراف وبدون عدد */}
               <View style={styles.subPageTitleBlock}>
-                <View style={styles.subPageTitleWithCountRow}>
-                  <Text style={styles.subPageMainTitle}>
-                    {selectedProfession.name_ar}
-                  </Text>
-                  <View style={styles.professionCountBadge}>
-                    <Text style={styles.professionCountText}>
-                      {professionCraftsmen.length} صنايعي
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.subPageSubtitle}>
-                  دليل الفنيين والحرفيين المعتمدين في القرية
+                <Text style={styles.subPageMainTitle}>
+                  {selectedProfession.name_ar}
                 </Text>
               </View>
             </View>
@@ -609,7 +587,6 @@ export function CraftsmenScreen() {
                     <CraftsmanCard
                       key={item.id}
                       item={item}
-                      onRatePress={setRatingTarget}
                       onPress={(c) => setSelectedCraftsman(c)}
                     />
                   ))}
@@ -737,7 +714,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FAF5EE',
+    backgroundColor: 'transparent',
     borderBottomWidth: 0,
     zIndex: 10,
   },
@@ -746,7 +723,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   fixedSubHeaderBox: {
-    backgroundColor: '#FAF5EE',
+    backgroundColor: 'transparent',
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 4,
@@ -780,10 +757,10 @@ const styles = StyleSheet.create({
     writingDirection: 'rtl',
   },
   subPageFixedHeader: {
-    backgroundColor: '#FAF5EE',
+    backgroundColor: 'transparent',
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingTop: 10,
+    paddingBottom: 8,
     borderBottomWidth: 0,
   },
   subPageHeaderRow: {
@@ -793,62 +770,17 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   cleanBackArrowBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  headerIconBadge: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1,
-    borderColor: '#FED7AA',
+    padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
   subPageTitleBlock: {
     flex: 1,
-    gap: 3,
-  },
-  subPageTitleWithCountRow: {
-    flexDirection: rtlFlexDirection,
-    alignItems: 'center',
-    gap: 8,
   },
   subPageMainTitle: {
     fontSize: 20,
     fontWeight: '900',
     color: '#0F172A',
-    textAlign: rtlTextAlign,
-    writingDirection: 'rtl',
-  },
-  professionCountBadge: {
-    backgroundColor: '#FFF7ED',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-  },
-  professionCountText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#973c00',
-  },
-  subPageSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
   },
