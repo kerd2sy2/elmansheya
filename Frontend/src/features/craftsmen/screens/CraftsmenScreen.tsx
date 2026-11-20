@@ -526,23 +526,25 @@ export function CraftsmenScreen() {
           </View>
         </ScrollView>
       ) : selectedProfession ? (
-        /* ٢. صفحة الصنعة المختارة: سهم رجوع نظيف بدون خلفية ومحاذاة يمين كاملة */
+        /* ٢. صفحة الصنعة المختارة: هيدر حديث وراقي بثيم المنشية */
         <View style={styles.tabContainer}>
           <View style={styles.subPageFixedHeader}>
             <View style={styles.subPageHeaderRow}>
-              {/* سهم الرجوع النظيف بدون أي خلفية */}
+              {/* زر الرجوع الدائري الأنيق */}
               <Pressable
                 style={styles.cleanBackArrowBtn}
-                onPress={() => setSelectedProfession(null)}>
+                onPress={() => setSelectedProfession(null)}
+                hitSlop={12}
+                accessibilityLabel="رجوع لقائمة الصنائع">
                 <Ionicons
                   name="arrow-forward"
-                  size={24}
+                  size={22}
                   color="#0F172A"
                 />
               </Pressable>
 
-              {/* عنوان المهنة مع الأيقونة بجانبه مباشرة بمحاذاة اليمين */}
-              <View style={styles.subPageTitleBlock}>
+              {/* بادج أيقونة الصنعة */}
+              <View style={styles.headerIconBadge}>
                 <Ionicons
                   name={
                     (selectedProfession.icon_name ||
@@ -551,8 +553,22 @@ export function CraftsmenScreen() {
                   size={22}
                   color="#973c00"
                 />
-                <Text style={styles.subPageMainTitle}>
-                  {selectedProfession.name_ar}
+              </View>
+
+              {/* عنوان المهنة وعدد الصنايعية والوصف */}
+              <View style={styles.subPageTitleBlock}>
+                <View style={styles.subPageTitleWithCountRow}>
+                  <Text style={styles.subPageMainTitle}>
+                    {selectedProfession.name_ar}
+                  </Text>
+                  <View style={styles.professionCountBadge}>
+                    <Text style={styles.professionCountText}>
+                      {professionCraftsmen.length} صنايعي
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.subPageSubtitle}>
+                  دليل الفنيين والحرفيين المعتمدين في القرية
                 </Text>
               </View>
             </View>
@@ -757,39 +773,82 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   detailBackTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
     color: '#0F172A',
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
   },
   subPageFixedHeader: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAF5EE',
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 6,
+    paddingTop: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 0,
   },
   subPageHeaderRow: {
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     width: '100%',
   },
   cleanBackArrowBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 4,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  headerIconBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
     alignItems: 'center',
     justifyContent: 'center',
   },
   subPageTitleBlock: {
+    flex: 1,
+    gap: 3,
+  },
+  subPageTitleWithCountRow: {
     flexDirection: rtlFlexDirection,
     alignItems: 'center',
     gap: 8,
   },
   subPageMainTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: '900',
     color: '#0F172A',
+    textAlign: rtlTextAlign,
+    writingDirection: 'rtl',
+  },
+  professionCountBadge: {
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+  },
+  professionCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#973c00',
+  },
+  subPageSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
   },

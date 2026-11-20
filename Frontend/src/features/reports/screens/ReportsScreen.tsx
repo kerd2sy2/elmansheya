@@ -781,9 +781,6 @@ export function ReportsScreen() {
             <Text style={styles.sectionTitle}>
               بلاغات القرية الأخيرة ({reports.length})
             </Text>
-            <Text style={styles.sectionSubtitle}>
-              متابعة حالة المشكلات التي تم الإبلاغ عنها وتوثيق حلها
-            </Text>
           </View>
 
           {sortedReports.length === 0 ? (
@@ -927,19 +924,12 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   reportsHeaderInfo: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
-    textAlign: rtlTextAlign,
-    writingDirection: 'rtl',
-    marginBottom: 3,
-  },
-  sectionSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
     textAlign: rtlTextAlign,
     writingDirection: 'rtl',
   },
