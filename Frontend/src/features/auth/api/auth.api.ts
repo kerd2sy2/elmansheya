@@ -339,6 +339,27 @@ export async function unlockBiometricSessionOnServer(
   }
 }
 
+export async function toggleBiometricOnServer(
+  phone: string,
+  enabled: boolean
+): Promise<{ ok: boolean }> {
+  try {
+    const deviceFingerprint = await getCompositeDeviceFingerprint();
+    const res = await fetch(`${API_BASE_URL}/auth/toggle-biometric`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone,
+        enabled,
+        device_fingerprint: deviceFingerprint,
+      }),
+    });
+    return { ok: res.ok };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /**
  * إرسال كود التحقق السري (4 أرقام) مباشرة إلى واتساب المواطن من سيرفر التطبيق
  */

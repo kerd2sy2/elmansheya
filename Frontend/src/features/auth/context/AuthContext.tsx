@@ -22,6 +22,7 @@ import {
   checkDeviceBinding,
   loginWithPhoneAndPassword,
   registerCitizenAccount,
+  toggleBiometricOnServer,
   unlockBiometricSessionOnServer,
 } from '../api/auth.api';
 import {
@@ -211,15 +212,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     rawUser: AuthenticatedUser,
     refreshToken?: string
   ) => {
+    const persistedPref = await getSecureItem<{ enabled: boolean }>(BIOMETRIC_PREF_KEY);
+    const isBioAllowed = persistedPref ? persistedPref.enabled : Boolean(rawUser.biometric_enabled);
+
     const finalUser: AuthenticatedUser = {
       ...rawUser,
-      biometric_enabled: false,
+      biometric_enabled: isBioAllowed,
     };
     setUser(finalUser);
     const token = refreshToken || `wa-refresh-${Date.now()}`;
     setLastRefreshToken(token);
     await setSecureItem(ACTIVE_SESSION_STORAGE_KEY, finalUser);
     await setSecureItem(LAST_REFRESH_TOKEN_KEY, token);
+
+    if (isBioAllowed) {
+      const bioData: SavedBiometricDeviceSession = {
+        phone: finalUser.phone,
+        full_name: finalUser.full_name,
+        refresh_token: token,
+        userSnapshot: finalUser,
+      };
+      setSavedBiometricSession(bioData);
+      await setSecureItem(BIOMETRIC_STORAGE_KEY, bioData);
+    }
 
     const bound: BoundCitizenInfo = {
       phone: finalUser.phone,
@@ -321,6 +336,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         savedBiometricSession.refresh_token
       );
       if (!res.ok || !res.data) {
+        // إذا تعذر الوصول للسيرفر أو حدث خطأ شبكة، نعتمد على التحقق الحيوي المؤكد من الجهاز
+        if (savedBiometricSession.userSnapshot) {
+          const snapshotUser: AuthenticatedUser = {
+            ...savedBiometricSession.userSnapshot,
+            biometric_enabled: true,
+          };
+          setUser(snapshotUser);
+          await setSecureItem(ACTIVE_SESSION_STORAGE_KEY, snapshotUser);
+          appendLog('تسجيل الدخول الناجح عبر البصمة (جلسة محلية موثوقة)');
+          return { ok: true };
+        }
         return { ok: false, error: res.error };
       }
 
@@ -390,6 +416,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(updated);
     setSecureItem(ACTIVE_SESSION_STORAGE_KEY, updated);
     setSecureItem(BIOMETRIC_PREF_KEY, { enabled });
+    toggleBiometricOnServer(user.phone, enabled).catch(() => {});
     if (!enabled) {
       setSavedBiometricSession(null);
       clearSecureItem(BIOMETRIC_STORAGE_KEY);

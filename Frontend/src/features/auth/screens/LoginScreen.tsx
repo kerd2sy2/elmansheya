@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import LottieView from 'lottie-react-native';
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Animated,
   Platform,
@@ -14,17 +14,39 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { APP_THEME } from '@/core/theme/colors';
 import { rtlFlexDirection, rtlTextAlign } from '@/core/theme/rtl';
 import { useSmoothKeyboardOffset } from '@/core/theme/useSmoothKeyboardOffset';
+import { BiometricLoginCard } from '../components/BiometricLoginCard';
 import { OtpVerifyStep } from '../components/OtpVerifyStep';
 import { PhoneEntryStep } from '../components/PhoneEntryStep';
 import { RegisterDetailsStep } from '../components/RegisterDetailsStep';
 import { WelcomeOnboarding } from '../components/WelcomeOnboarding';
+import { useAuth } from '../context/AuthContext';
 import { useWhatsAppAuthFlow } from '../hooks/useWhatsAppAuthFlow';
 
 export function LoginScreen() {
+  const { savedBiometricSession, loginWithBiometric } = useAuth();
   const flow = useWhatsAppAuthFlow();
+  const [useDifferentPhone, setUseDifferentPhone] = useState<boolean>(false);
+  const [bioLoading, setBioLoading] = useState<boolean>(false);
+  const [bioError, setBioError] = useState<string | null>(null);
+
   const keyboardOffset = useSmoothKeyboardOffset(
     Platform.OS === 'android' ? 10 : 0
   );
+
+  const handleBiometricAuth = useCallback(async () => {
+    setBioError(null);
+    setBioLoading(true);
+    try {
+      const res = await loginWithBiometric();
+      if (!res.ok && res.error) {
+        setBioError(res.error);
+      }
+    } catch {
+      setBioError('تعذر التحقق من البصمة. يرجى المحاولة مرة أخرى.');
+    } finally {
+      setBioLoading(false);
+    }
+  }, [loginWithBiometric]);
 
   const handleOpenCountryPicker = useCallback(
     () => flow.setShowCountryPicker(true),
@@ -88,7 +110,16 @@ export function LoginScreen() {
               </View>
             ) : null}
 
-            {flow.step === 'phone' ? (
+            {flow.step === 'phone' && savedBiometricSession && !useDifferentPhone ? (
+              <BiometricLoginCard
+                fullName={savedBiometricSession.full_name || 'مواطن'}
+                phone={savedBiometricSession.phone}
+                loading={bioLoading}
+                errorText={bioError}
+                onAuthenticate={handleBiometricAuth}
+                onUseDifferentPhone={() => setUseDifferentPhone(true)}
+              />
+            ) : flow.step === 'phone' ? (
               <PhoneEntryStep
                 selectedCountry={flow.selectedCountry}
                 phone={flow.phone}
@@ -107,6 +138,10 @@ export function LoginScreen() {
                 onCloseCountryPicker={handleCloseCountryPicker}
                 onSelectCountry={flow.handleSelectCountry}
                 onReturnToOtp={flow.handleReturnToOtp}
+                onSwitchToBiometric={
+                  savedBiometricSession ? () => setUseDifferentPhone(false) : undefined
+                }
+                savedBiometricName={savedBiometricSession?.full_name}
               />
             ) : null}
 

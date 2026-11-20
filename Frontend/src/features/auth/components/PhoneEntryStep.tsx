@@ -40,6 +40,8 @@ interface PhoneEntryStepProps {
   onCloseCountryPicker: () => void;
   onSelectCountry: (countryCode: string) => void;
   onReturnToOtp: () => void;
+  onSwitchToBiometric?: () => void;
+  savedBiometricName?: string;
 }
 
 export const PhoneEntryStep = memo(function PhoneEntryStep({
@@ -60,6 +62,8 @@ export const PhoneEntryStep = memo(function PhoneEntryStep({
   onCloseCountryPicker,
   onSelectCountry,
   onReturnToOtp,
+  onSwitchToBiometric,
+  savedBiometricName,
 }: PhoneEntryStepProps) {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -198,6 +202,22 @@ export const PhoneEntryStep = memo(function PhoneEntryStep({
           خدمة مجانية بالكامل ومؤمنة لأهالي القرية
         </Text>
       </View>
+
+      {onSwitchToBiometric ? (
+        <Pressable
+          style={({ pressed }) => [
+            styles.biometricSwitchBtn,
+            pressed && styles.biometricSwitchBtnPressed,
+          ]}
+          onPress={onSwitchToBiometric}
+          accessibilityRole="button"
+          accessibilityLabel="تسجيل الدخول بالبصمة">
+          <Ionicons name="finger-print" size={19} color={APP_THEME.primary} />
+          <Text style={styles.biometricSwitchText}>
+            الدخول السريع بالبصمة {savedBiometricName ? `(${savedBiometricName})` : ''}
+          </Text>
+        </Pressable>
+      ) : null}
 
       <Modal
         visible={showCountryPicker}
@@ -460,5 +480,27 @@ const styles = StyleSheet.create({
   },
   checkSpacer: {
     width: 18,
+  },
+  biometricSwitchBtn: {
+    flexDirection: rtlFlexDirection,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1.5,
+    borderColor: '#FED7AA',
+  },
+  biometricSwitchBtnPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
+  },
+  biometricSwitchText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: APP_THEME.primary,
   },
 });

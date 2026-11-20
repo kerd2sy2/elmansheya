@@ -147,18 +147,22 @@ export function NewsHomeScreen() {
     const visibleVideoItem = viewableItems.find(
       (vt) => Boolean(vt.isViewable && vt.item?.video_stream_url)
     );
-    setActiveVideoId(visibleVideoItem ? visibleVideoItem.item.id : null);
+    const nextId = visibleVideoItem ? visibleVideoItem.item.id : null;
+    setActiveVideoId((prev) => (prev === nextId ? prev : nextId));
   }).current;
 
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 30,
-    minimumViewTime: 0,
+    itemVisiblePercentThreshold: 40,
+    minimumViewTime: 250,
   }).current;
 
-  // معالجة التمرير للتأثير على الهيدر
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    handleScrollHeader(event.nativeEvent.contentOffset.y);
-  };
+  // معالجة التمرير للتأثير على الهيدر بسلاسة فائقة
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      handleScrollHeader(event.nativeEvent.contentOffset.y);
+    },
+    [handleScrollHeader]
+  );
 
   // تفاعل الضغط على لوجو المنشية في الهيدر
   const handleLogoPress = async () => {

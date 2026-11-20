@@ -28,7 +28,7 @@ interface NewsHomeHeaderProps {
   onPressNotifications: () => void;
 }
 
-export function NewsHomeHeader({
+export const NewsHomeHeader = React.memo(function NewsHomeHeader({
   topInset,
   headerTranslateY,
   headerOpacity,
@@ -70,6 +70,7 @@ export function NewsHomeHeader({
             autoPlay={false}
             loop={false}
             progress={1}
+            renderMode="HARDWARE"
             style={styles.headerLottie}
           />
         </Pressable>
@@ -130,7 +131,7 @@ export function NewsHomeHeader({
       ) : null}
     </Animated.View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   collapsibleHeaderWrap: {

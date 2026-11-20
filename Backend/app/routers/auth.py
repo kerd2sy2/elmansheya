@@ -450,6 +450,89 @@ async def complete_whatsapp_registration(request: Request):
         }
     }
 
+@router.post("/auth/biometric-login")
+@router.post("/api/v1/auth/biometric-login")
+async def biometric_login(request: Request):
+    try:
+        req_json = await request.json()
+    except Exception:
+        req_json = {}
+
+    phone = (req_json.get('phone') or '').strip()
+    device_fp = (req_json.get('device_fingerprint') or '').strip()
+    clean_phone = clean_phone_number(phone)
+
+    if not clean_phone:
+        return JSONResponse({"success": False, "error": {"code": "INVALID_PHONE", "message": "رقم الهاتف غير صالح"}}, status_code=400)
+
+    db = load_json(ACCOUNTS_FILE)
+    accounts = db.get('accounts', {})
+    if clean_phone not in accounts:
+        return JSONResponse({"success": False, "error": {"code": "ACCOUNT_NOT_FOUND", "message": "الحساب غير مسجل"}}, status_code=404)
+
+    acc = accounts[clean_phone]
+    uid = acc.get('ID') or f"usr-{int(time.time() * 1000)}"
+    role = acc.get('Role') or 'citizen'
+
+    acc['BiometricEnabled'] = True
+    if device_fp:
+        acc['BoundDeviceFingerprint'] = device_fp
+        d2u = db.setdefault('device_to_user', {})
+        d2u[device_fp] = uid
+    save_json(ACCOUNTS_FILE, db)
+
+    access_token, new_refresh = make_jwt_and_refresh(uid, clean_phone, role)
+    user_payload = {
+        "id": uid,
+        "full_name": acc.get('FullName') or "مواطن",
+        "phone": clean_phone,
+        "birth_date": acc.get('BirthDate') or acc.get('birth_date') or "",
+        "role": role,
+        "role_name_ar": acc.get('RoleNameAr') or "المواطن",
+        "verification_status": acc.get('VerificationStatus') or "verified",
+        "area": acc.get('Area') or "المنشية",
+        "avatar_url": acc.get('AvatarUrl') or acc.get('avatar_url') or "",
+        "biometric_enabled": True
+    }
+
+    return {
+        "success": True,
+        "data": {
+            "user": user_payload,
+            "access_token": access_token,
+            "refresh_token": new_refresh,
+            "tokens": {
+                "access_token": access_token,
+                "refresh_token": new_refresh
+            }
+        }
+    }
+
+@router.post("/auth/toggle-biometric")
+@router.post("/api/v1/auth/toggle-biometric")
+async def toggle_biometric_setting(request: Request):
+    try:
+        req_json = await request.json()
+    except Exception:
+        req_json = {}
+
+    phone = clean_phone_number(req_json.get('phone') or '')
+    enabled = bool(req_json.get('enabled', False))
+    device_fp = (req_json.get('device_fingerprint') or '').strip()
+
+    if not phone:
+        return JSONResponse({"success": False, "error": "رقم الهاتف مطلوب"}, status_code=400)
+
+    db = load_json(ACCOUNTS_FILE)
+    accounts = db.get('accounts', {})
+    if phone in accounts:
+        accounts[phone]['BiometricEnabled'] = enabled
+        if device_fp:
+            accounts[phone]['BoundDeviceFingerprint'] = device_fp
+        save_json(ACCOUNTS_FILE, db)
+        return {"success": True, "enabled": enabled}
+    return JSONResponse({"success": False, "error": "الحساب غير موجود"}, status_code=404)
+
 @router.post("/auth/request-sim-verification")
 @router.post("/api/v1/auth/request-sim-verification")
 async def request_sim_verification(request: Request):

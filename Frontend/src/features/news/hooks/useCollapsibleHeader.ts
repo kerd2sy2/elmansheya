@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing } from 'react-native';
 import { registerHomeScrollToTop } from '@/core/events/scrollEvents';
 
@@ -14,85 +14,87 @@ export function useCollapsibleHeader({
   const headerTranslateY = useRef(new Animated.Value(0)).current;
   const lastScrollY = useRef(0);
   const isHeaderHidden = useRef(false);
-  const isAnimating = useRef(false);
   const scrollDelta = useRef(0);
 
-  const headerOpacity = headerTranslateY.interpolate({
-    inputRange: [-headerHeight * 0.7, 0],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
+  const headerOpacity = useMemo(() => {
+    return headerTranslateY.interpolate({
+      inputRange: [-headerHeight * 0.75, 0],
+      outputRange: [0, 1],
+      extrapolate: 'clamp',
+    });
+  }, [headerHeight, headerTranslateY]);
 
-  const hideHeader = () => {
-    if (isHeaderHidden.current || isAnimating.current) return;
+  const hideHeader = useCallback(() => {
+    if (isHeaderHidden.current) return;
     isHeaderHidden.current = true;
-    isAnimating.current = true;
+    headerTranslateY.stopAnimation();
     Animated.timing(headerTranslateY, {
       toValue: -headerHeight,
-      duration: 260,
-      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+      duration: 200,
+      easing: Easing.out(Easing.quad),
       useNativeDriver: true,
-    }).start(() => {
-      isAnimating.current = false;
-    });
-  };
+    }).start();
+  }, [headerHeight, headerTranslateY]);
 
-  const showHeader = () => {
-    if (!isHeaderHidden.current || isAnimating.current) return;
+  const showHeader = useCallback(() => {
+    if (!isHeaderHidden.current) return;
     isHeaderHidden.current = false;
-    isAnimating.current = true;
+    headerTranslateY.stopAnimation();
     Animated.timing(headerTranslateY, {
       toValue: 0,
-      duration: 220,
-      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+      duration: 180,
+      easing: Easing.out(Easing.quad),
       useNativeDriver: true,
-    }).start(() => {
-      isAnimating.current = false;
-    });
-  };
+    }).start();
+  }, [headerTranslateY]);
 
-  const handleScrollHeader = (currentY: number) => {
-    // أ) إذا كان المستخدم في قمة الصفحة (<= 15px): أظهر الهيدر فوراً
-    if (currentY <= 15) {
-      if (isHeaderHidden.current) {
-        isHeaderHidden.current = false;
-        Animated.timing(headerTranslateY, {
-          toValue: 0,
-          duration: 180,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }).start();
+  const handleScrollHeader = useCallback(
+    (currentY: number) => {
+      // أ) إذا كان المستخدم في قمة الصفحة أو السحب لأسفل للتحديث (<= 20px): إظهار فوري ناعم
+      if (currentY <= 20) {
+        if (isHeaderHidden.current) {
+          isHeaderHidden.current = false;
+          headerTranslateY.stopAnimation();
+          Animated.timing(headerTranslateY, {
+            toValue: 0,
+            duration: 160,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }).start();
+        }
+        scrollDelta.current = 0;
+        lastScrollY.current = currentY;
+        return;
       }
-      scrollDelta.current = 0;
+
+      const diff = currentY - lastScrollY.current;
       lastScrollY.current = currentY;
-      return;
-    }
 
-    const diff = currentY - lastScrollY.current;
-    lastScrollY.current = currentY;
-
-    // ب) السحب لأسفل (Scroll Down): إخفاء ناعم بعد تحرك فعلي 18px وتجاوز 50px من القمة
-    if (diff > 0 && currentY > 50) {
-      scrollDelta.current = Math.max(0, scrollDelta.current + diff);
-      if (scrollDelta.current >= 18) {
-        scrollDelta.current = 0;
-        hideHeader();
+      // ب) السحب لأسفل (Scroll Down): إخفاء ناعم بعد تحرك فعلي 22px وتجاوز 55px من القمة
+      if (diff > 0 && currentY > 55) {
+        scrollDelta.current = Math.max(0, scrollDelta.current + diff);
+        if (scrollDelta.current >= 22) {
+          scrollDelta.current = 0;
+          hideHeader();
+        }
+      } else if (diff < 0) {
+        // ج) السحب لأعلى (Scroll Up / Swiping Down): إظهار فوري فائق السلاسة
+        scrollDelta.current = Math.min(0, scrollDelta.current + diff);
+        if (scrollDelta.current <= -14) {
+          scrollDelta.current = 0;
+          showHeader();
+        }
       }
-    } else if (diff < 0) {
-      // ج) السحب لأعلى (Scroll Up): إظهار فوري وسلس بعد تحرك 16px للأعلى
-      scrollDelta.current = Math.min(0, scrollDelta.current + diff);
-      if (scrollDelta.current <= -16) {
-        scrollDelta.current = 0;
-        showHeader();
-      }
-    }
-  };
+    },
+    [hideHeader, showHeader, headerTranslateY]
+  );
 
   useEffect(() => {
     return registerHomeScrollToTop(() => {
       onScrollToTopRequest?.();
       if (isHeaderHidden.current) {
         isHeaderHidden.current = false;
+        headerTranslateY.stopAnimation();
         Animated.timing(headerTranslateY, {
           toValue: 0,
           duration: 180,
