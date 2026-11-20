@@ -157,7 +157,7 @@ function generate15CharAntiBanHash() {
 
 function buildAntiBanOtpMessage(code) {
     const hash = generate15CharAntiBanHash();
-    return `رمز التحقق الخاص بك هو : *${code}*\n\nآلي : ${hash}`;
+    return `رمز التحقق الخاص بك هو : *${code}*\n\nمعرف : ${hash}`;
 }
 
 async function sendAntiBanOtpToJid(targetJid, code) {
