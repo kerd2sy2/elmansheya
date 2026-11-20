@@ -210,22 +210,25 @@ export function ProfileScreen() {
           });
 
         const local = await getMyReports(userKey);
-        const map = new Map<string, MyReportItem>();
-        mapped.forEach((rep) => {
-          if (rep && (rep.id || rep.reportNumber)) {
-            map.set(String(rep.reportNumber || rep.id), rep);
-          }
-        });
-        (Array.isArray(local) ? local : []).forEach((rep) => {
-          if (rep && (rep.id || rep.reportNumber)) {
-            const key = String(rep.reportNumber || rep.id);
-            if (!map.has(key)) {
-              map.set(key, rep);
-            }
-          }
-        });
+        const seenIds = new Set<string>();
+        const seenNumbers = new Set<number>();
+        const deduplicated: MyReportItem[] = [];
 
-        const finalReports = Array.from(map.values()).sort(
+        // ندمج البلاغات مع إعطاء الأولوية لبيانات السيرفر الأحدث
+        for (const rep of [...mapped, ...(Array.isArray(local) ? local : [])]) {
+          if (!rep) continue;
+          const repId = String(rep.id || '');
+          const repNum = Number(rep.reportNumber || 0);
+
+          if (repId && seenIds.has(repId)) continue;
+          if (repNum > 0 && seenNumbers.has(repNum)) continue;
+
+          if (repId) seenIds.add(repId);
+          if (repNum > 0) seenNumbers.add(repNum);
+          deduplicated.push(rep);
+        }
+
+        const finalReports = deduplicated.sort(
           (a, b) => (Number(b.reportNumber) || 0) - (Number(a.reportNumber) || 0)
         );
 

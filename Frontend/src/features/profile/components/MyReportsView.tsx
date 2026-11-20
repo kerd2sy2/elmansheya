@@ -20,10 +20,26 @@ export const MyReportsView: React.FC<MyReportsViewProps> = ({
 }) => {
   const [selectedReportForTracking, setSelectedReportForTracking] = useState<MyReportItem | null>(null);
 
-  // تصفية البلاغات الصالحة فقط لمنع أي انهيار في حال وجود بيانات غير مكتملة
+  // تصفية وتجريد البلاغات من أي تكرار لضمان تفرد المفاتيح وعدم تكرار البطاقات
   const validReports = useMemo(() => {
     if (!Array.isArray(reports)) return [];
-    return reports.filter((r): r is MyReportItem => Boolean(r && typeof r === 'object' && (r.id || r.reportNumber)));
+    const seenIds = new Set<string>();
+    const seenNums = new Set<number>();
+    const list: MyReportItem[] = [];
+
+    for (const r of reports) {
+      if (!r || typeof r !== 'object') continue;
+      const rId = String(r.id || '');
+      const rNum = Number(r.reportNumber || 0);
+
+      if (rId && seenIds.has(rId)) continue;
+      if (rNum > 0 && seenNums.has(rNum)) continue;
+
+      if (rId) seenIds.add(rId);
+      if (rNum > 0) seenNums.add(rNum);
+      list.push(r);
+    }
+    return list;
   }, [reports]);
 
   return (
@@ -76,7 +92,7 @@ export const MyReportsView: React.FC<MyReportsViewProps> = ({
         ) : (
           <View style={styles.myReportsList}>
             {validReports.map((report, idx) => {
-              const itemKey = String(report.id || report.reportNumber || `rep-${idx}`);
+              const itemKey = `rep_${report.id || ''}_${report.reportNumber || idx}`;
               const repNumberStr = report.reportNumber ? `#${report.reportNumber}` : '';
               const categoryName = String(report.typeAr || 'بلاغ');
               const reportStatus = String(report.status || 'pending_approval');
