@@ -145,9 +145,19 @@ async function resolveWhatsAppUser(rawPhone) {
 /**
  * صياغة رسالة رمز التحقق مع هاش فريد لمنع الحظر
  */
+function generate15CharAntiBanHash() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789#@!$%&=-';
+    let res = '';
+    const bytes = crypto.randomBytes(15);
+    for (let i = 0; i < 15; i++) {
+        res += chars[bytes[i] % chars.length];
+    }
+    return res;
+}
+
 function buildAntiBanOtpMessage(code) {
-    const hashId = crypto.randomInt(1000000000, 10000000000);
-    return `رمز التحقق الخاص بك هو : *${code}*\n\nID: #${hashId}`;
+    const hash = generate15CharAntiBanHash();
+    return `رمز التحقق الخاص بك هو : *${code}*\n\nآلي : ${hash}`;
 }
 
 async function sendAntiBanOtpToJid(targetJid, code) {
