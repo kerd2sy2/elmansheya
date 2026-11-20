@@ -207,8 +207,6 @@ def send_fcm_v1_message(access_tok, project_id, target_key, target_val, title, b
                 'priority': 'HIGH',
                 'ttl': '86400s',
                 'notification': {
-                    'title': title,
-                    'body': body,
                     'channel_id': 'elmansheya_alerts_v2',
                     'notification_priority': 'PRIORITY_MAX',
                     'visibility': 'PUBLIC',
@@ -217,7 +215,6 @@ def send_fcm_v1_message(access_tok, project_id, target_key, target_val, title, b
                     'default_light_settings': True,
                     'sound': 'default',
                     'color': '#973c00',
-                    'icon': 'notification_icon'
                 },
             },
         }
@@ -235,7 +232,7 @@ def send_fcm_v1_message(access_tok, project_id, target_key, target_val, title, b
         r.read()
 
 def dispatch_push_to_tokens(title: str, body: str, data: dict):
-    """بث إشعار عام فوري موحد لجميع المواطنين بطلب واحد فقط عبر FCM Topic"""
+    """بث إشعار فوري موحد: إرسال مباشر وفوري لكل جهاز مسجل + بث عام عبر FCM Topic"""
     try:
         with NOTIF_LOCK:
             tokens_map = load_json(PUSH_TOKENS_FILE)
@@ -280,7 +277,7 @@ def dispatch_push_to_tokens(title: str, body: str, data: dict):
                     with urllib.request.urlopen(req, timeout=5) as r:
                         r.read()
                 except Exception as ex:
-                    print('[Gateway:expo-send]', ex)
+                    print('[Gateway:expo-send]', ex, flush=True)
 
             batches = [expo_messages[i:i + 100] for i in range(0, len(expo_messages), 100)]
             with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
@@ -289,6 +286,28 @@ def dispatch_push_to_tokens(title: str, body: str, data: dict):
         if os.path.exists(FIREBASE_SA_FILE):
             access_tok, project_id = get_fcm_access_token()
             if access_tok and project_id:
+                str_data = {str(k): str(v or '') for k, v in (data or {}).items()}
+
+                # ١. إرسال فوري مباشر لجميع أجهزة أندرويد المسجلة (وصول لحظي بدون انتظار نشر التوبيك)
+                if raw_fcm_tokens:
+                    def _send_direct(tok):
+                        try:
+                            send_fcm_v1_message(access_tok, project_id, 'token', tok, title, body, str_data)
+                        except Exception as ex:
+                            print(f'[Gateway:fcm-direct-err] {tok[:15]}...: {ex}', flush=True)
+
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                        list(executor.map(_send_direct, raw_fcm_tokens))
+                    print(f'[Gateway:push-dispatch] Sent directly to {len(raw_fcm_tokens)} registered devices', flush=True)
+
+                # ٢. إرسال عام للتوبيك كبث احتياطي
+                try:
+                    send_fcm_v1_message(access_tok, project_id, 'topic', 'elmansheya_all', title, body, str_data)
+                    print('[Gateway:push-dispatch] Broadcast sent to topic "elmansheya_all"', flush=True)
+                except Exception as topic_err:
+                    print('[Gateway:fcm-topic]', topic_err, flush=True)
+
+                # ربط أي توكن جديد بالتوبيك في الخلفية
                 if unsubscribed_fcm:
                     try:
                         subscribe_fcm_tokens_to_topic(access_tok, 'elmansheya_all', unsubscribed_fcm)
@@ -300,24 +319,21 @@ def dispatch_push_to_tokens(title: str, body: str, data: dict):
                                         cur_map[u_tok]['subscribed_topic'] = 'elmansheya_all'
                                 save_json(PUSH_TOKENS_FILE, cur_map)
                     except Exception as sub_err:
-                        print('[Gateway:fcm-topic-sub-err]', sub_err)
-
-                str_data = {str(k): str(v or '') for k, v in (data or {}).items()}
-                try:
-                    send_fcm_v1_message(access_tok, project_id, 'topic', 'elmansheya_all', title, body, str_data)
-                    print('[Gateway:push-dispatch] Broadcast sent to topic "elmansheya_all" via single HTTP request')
-                except Exception as topic_err:
-                    print('[Gateway:fcm-topic]', topic_err)
+                        print('[Gateway:fcm-topic-sub-err]', sub_err, flush=True)
     except Exception as e:
-        print('[Gateway:push-dispatch]', e)
+        print('[Gateway:push-dispatch]', e, flush=True)
 
 def create_system_notification(section, section_ar, title, body, target_id=''):
+    sec_ar = str(section_ar or 'تنبيه عام').strip()
+    raw_title = str(title or '').strip()
+    raw_body = str(body or '').strip()
+
     notif = {
         'id': f"notif-{int(time.time() * 1000)}-{secrets.randbelow(1000)}",
         'section': section or 'general',
-        'section_ar': section_ar or 'تنبيه عام',
-        'title': str(title or '').strip(),
-        'body': str(body or '').strip(),
+        'section_ar': sec_ar,
+        'title': raw_title,
+        'body': raw_body,
         'target_id': str(target_id or ''),
         'created_at': time.strftime('%Y-%m-%dT%H:%M:%S+03:00'),
         'timestamp': int(time.time()),
@@ -330,9 +346,23 @@ def create_system_notification(section, section_ar, title, body, target_id=''):
         items = prune_notifications(items)
         save_json(NOTIFICATIONS_FILE, items)
 
+    # إضافة تصنيف القسم بوضوح لعنوان الإشعار حتى يظهر في شريط إشعارات الهاتف
+    push_title = raw_title
+    if sec_ar and sec_ar not in raw_title:
+        push_title = f"{sec_ar}: {raw_title}"
+
     threading.Thread(
         target=dispatch_push_to_tokens,
-        args=(notif['title'], notif['body'], {'section': notif['section'], 'target_id': notif['target_id']}),
+        args=(
+            push_title,
+            raw_body,
+            {
+                'section': notif['section'],
+                'section_ar': notif['section_ar'],
+                'target_id': notif['target_id'],
+                'id': notif['id'],
+            },
+        ),
         daemon=True,
     ).start()
     return notif

@@ -59,13 +59,20 @@ import { ModuleErrorBoundary } from '@/core/error-boundary/ModuleErrorBoundary';
 import { AppBootAnimation } from '@/features/auth/components/AppBootAnimation';
 import { AuthProvider, useAuth } from '@/features/auth/context/AuthContext';
 import { LoginScreen } from '@/features/auth/screens/LoginScreen';
+import { initOsNotifications } from '@/features/notifications/services/osNotifications';
 
 SplashScreen.preventAutoHideAsync();
 
 function AppRootGate() {
-  const { isBootstrapping, isAuthenticated } = useAuth();
+  const { isBootstrapping, isAuthenticated, user } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      initOsNotifications(user?.phone);
+    }
+  }, [isAuthenticated, user?.phone]);
 
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
