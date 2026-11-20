@@ -15,6 +15,7 @@ import hmac
 import threading
 import subprocess
 import tempfile
+import concurrent.futures
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'go-api', 'data')
 ACCOUNTS_FILE = os.path.join(DATA_DIR, 'auth_accounts.json')
@@ -244,7 +245,7 @@ def _get_fcm_access_token():
     header = _b64url(b'{"alg":"RS256","typ":"JWT"}')
     claims = _b64url(json.dumps({
         'iss': client_email,
-        'scope': 'https://www.googleapis.com/auth/firebase.messaging',
+        'scope': 'https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/cloud-platform',
         'aud': token_uri,
         'iat': now_ts,
         'exp': now_ts + 3600,
@@ -289,6 +290,37 @@ def _get_fcm_access_token():
             _FCM_TOKEN_CACHE['expires_at'] = now_ts + 3000
         return access_tok, project_id
 
+def _subscribe_fcm_tokens_to_topic(access_tok, topic_name, tokens):
+    """ربط حزمة من التوكنات (حتى 1000 توكن لكل طلب) بـ Topic في Firebase بمكالمة واحدة فقط"""
+    if not access_tok or not topic_name or not tokens:
+        return
+    clean_topic = topic_name.strip().lstrip('/')
+    if not clean_topic.startswith('topics/'):
+        clean_topic = f"topics/{clean_topic}"
+    for i in range(0, len(tokens), 1000):
+        chunk = [str(t).strip() for t in tokens[i:i + 1000] if str(t).strip() and not str(t).startswith('Expo')]
+        if not chunk:
+            continue
+        try:
+            payload = json.dumps({
+                'to': f"/{clean_topic}",
+                'registration_tokens': chunk,
+            }, ensure_ascii=False).encode('utf-8')
+            req = urllib.request.Request(
+                'https://iid.googleapis.com/iid/v1:batchAdd',
+                data=payload,
+                headers={
+                    'Authorization': f'Bearer {access_tok}',
+                    'access_token_auth': 'true',
+                    'Content-Type': 'application/json; charset=utf-8',
+                },
+                method='POST',
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                resp.read()
+        except Exception as e:
+            print(f'[Gateway:fcm-topic-sub] {e}')
+
 def _send_fcm_v1_message(access_tok, project_id, target_key, target_val, title, body, str_data):
     url = f'https://fcm.googleapis.com/v1/projects/{project_id}/messages:send'
     payload = json.dumps({
@@ -331,6 +363,10 @@ def _send_fcm_v1_message(access_tok, project_id, target_key, target_val, title, 
         r.read()
 
 def dispatch_push_to_tokens(title, body, data):
+    """
+    بث إشعار عام فوري موحد لجميع المواطنين بطلب واحد فقط (Broadcast via FCM Topic)
+    دون تكرار، ودون حلقة تكرارية، ودون أي تهنيج أو ضغط على السيرفر.
+    """
     try:
         with NOTIF_LOCK:
             tokens_map = load_json(PUSH_TOKENS_FILE)
@@ -339,7 +375,8 @@ def dispatch_push_to_tokens(title, body, data):
 
         expo_messages = []
         raw_fcm_tokens = []
-        for tok in list(tokens_map.keys()):
+        unsubscribed_fcm = []
+        for tok, info in tokens_map.items():
             t = str(tok or '').strip()
             if not t or len(t) < 20 or t == 'diag':
                 continue
@@ -355,35 +392,57 @@ def dispatch_push_to_tokens(title, body, data):
                 })
             else:
                 raw_fcm_tokens.append(t)
+                if not isinstance(info, dict) or not info.get('subscribed_topic'):
+                    unsubscribed_fcm.append(t)
 
-        for i in range(0, len(expo_messages), 100):
-            batch = expo_messages[i:i + 100]
-            payload = json.dumps(batch, ensure_ascii=False).encode('utf-8')
-            req = urllib.request.Request(
-                'https://exp.host/--/api/v2/push/send',
-                data=payload,
-                headers={
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                },
-                method='POST',
-            )
-            with urllib.request.urlopen(req, timeout=8) as r:
-                r.read()
+        # 1. إرسال توكنات Expo المتبقية (إن وجدت) بالتوازي دون تعطيل السيرفر
+        if expo_messages:
+            def _send_expo_batch(batch):
+                try:
+                    payload = json.dumps(batch, ensure_ascii=False).encode('utf-8')
+                    req = urllib.request.Request(
+                        'https://exp.host/--/api/v2/push/send',
+                        data=payload,
+                        headers={
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                        },
+                        method='POST',
+                    )
+                    with urllib.request.urlopen(req, timeout=5) as r:
+                        r.read()
+                except Exception as ex:
+                    print('[Gateway:expo-send]', ex)
 
+            batches = [expo_messages[i:i + 100] for i in range(0, len(expo_messages), 100)]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                list(executor.map(_send_expo_batch, batches))
+
+        # 2. إرسال البث الموحد عبر Google FCM Topic بطلب واحد فقط للجميع
         if os.path.exists(FIREBASE_SA_FILE):
             access_tok, project_id = _get_fcm_access_token()
             if access_tok and project_id:
+                # إذا وجد توكنات جديدة نربطها بالـ Topic دفعة واحدة (1000 توكن بطلب واحد)
+                if unsubscribed_fcm:
+                    try:
+                        _subscribe_fcm_tokens_to_topic(access_tok, 'elmansheya_all', unsubscribed_fcm)
+                        with NOTIF_LOCK:
+                            cur_map = load_json(PUSH_TOKENS_FILE)
+                            if isinstance(cur_map, dict):
+                                for u_tok in unsubscribed_fcm:
+                                    if u_tok in cur_map and isinstance(cur_map[u_tok], dict):
+                                        cur_map[u_tok]['subscribed_topic'] = 'elmansheya_all'
+                                save_json(PUSH_TOKENS_FILE, cur_map)
+                    except Exception as sub_err:
+                        print('[Gateway:fcm-topic-sub-err]', sub_err)
+
                 str_data = {str(k): str(v or '') for k, v in (data or {}).items()}
+                # بث فوري بطلب واحد فقط! خوادم جوجل السحابية تتولى توزيعه لآلاف الأجهزة بالتوازي في كسر من الثانية
                 try:
                     _send_fcm_v1_message(access_tok, project_id, 'topic', 'elmansheya_all', title, body, str_data)
+                    print('[Gateway:push-dispatch] Broadcast sent to topic "elmansheya_all" via single HTTP request')
                 except Exception as topic_err:
                     print('[Gateway:fcm-topic]', topic_err)
-                for fcm_tok in raw_fcm_tokens:
-                    try:
-                        _send_fcm_v1_message(access_tok, project_id, 'token', fcm_tok, title, body, str_data)
-                    except Exception as tok_err:
-                        print('[Gateway:fcm-token]', tok_err)
     except Exception as e:
         print('[Gateway:push-dispatch]', e)
 
@@ -813,9 +872,21 @@ class GatewayHandler(BaseHTTPRequestHandler):
                         'device_fingerprint': (req_json.get('device_fingerprint') or '').strip(),
                         'platform': (req_json.get('platform') or 'android').strip(),
                         'project_id': 'elmansheya-960f1',
+                        'subscribed_topic': 'elmansheya_all',
                         'updated_at': int(time.time()),
                     }
                     save_json(PUSH_TOKENS_FILE, tokens_map)
+
+                if not token.startswith('Expo') and os.path.exists(FIREBASE_SA_FILE):
+                    def _async_sub_token(t):
+                        try:
+                            acc_tok, _ = _get_fcm_access_token()
+                            if acc_tok:
+                                _subscribe_fcm_tokens_to_topic(acc_tok, 'elmansheya_all', [t])
+                        except Exception:
+                            pass
+                    threading.Thread(target=_async_sub_token, args=(token,), daemon=True).start()
+
                 self.send_json({'success': True})
                 return
             except Exception as e:
