@@ -88,27 +88,9 @@ export function useNotificationsFeed(
       initialLoadedRef.current = true;
       highestSeenTimestampRef.current = Math.max(
         maxTs,
-        current.lastClearedTimestamp
+        current.lastClearedTimestamp,
+        nowSec
       );
-      const newestFresh = items.find((it) => {
-        const ts = Number(it.timestamp || 0);
-        return (
-          ts > current.lastClearedTimestamp &&
-          ts > (current.lastBannerTimestamp || 0) &&
-          nowSec - ts <= FRESH_BANNER_WINDOW_SEC &&
-          !dismissedSet.has(it.id)
-        );
-      });
-      if (newestFresh) {
-        persistNotifState({
-          ...current,
-          lastBannerTimestamp: Math.max(
-            current.lastBannerTimestamp || 0,
-            Number(newestFresh.timestamp || 0)
-          ),
-        });
-        deliverOsNotification(newestFresh);
-      }
       return;
     }
 
@@ -164,7 +146,8 @@ export function useNotificationsFeed(
         NOTIF_STATE_STORAGE_KEY
       );
       if (!active) return;
-      if (saved && typeof saved === 'object') {
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (saved && typeof saved === 'object' && saved.lastClearedTimestamp) {
         const cleanSaved: StoredNotifState = {
           lastClearedTimestamp: Number(saved.lastClearedTimestamp || 0),
           lastBannerTimestamp: Number(saved.lastBannerTimestamp || 0),
@@ -174,6 +157,16 @@ export function useNotificationsFeed(
         };
         stateRef.current = cleanSaved;
         setNotifState(cleanSaved);
+      } else {
+        // مواطن جديد لأول مرة: تبدأ قائمته نظيفة تماماً دون أي إشعارات قديمة من الماضي
+        const freshState: StoredNotifState = {
+          lastClearedTimestamp: nowSec,
+          lastBannerTimestamp: nowSec,
+          dismissedIds: [],
+        };
+        stateRef.current = freshState;
+        setNotifState(freshState);
+        await setSecureItem(NOTIF_STATE_STORAGE_KEY, freshState);
       }
       setStateLoaded(true);
       await refresh();
