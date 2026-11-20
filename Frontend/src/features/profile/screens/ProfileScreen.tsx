@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as Updates from 'expo-updates';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -34,6 +35,7 @@ import { API_BASE_URL } from '@/core/config/api.config';
 import { uploadMediaToDrive } from '@/core/storage/driveUpload';
 import { getDirectImageUrl } from '@/core/utils/googleDrive';
 import { VerificationModal } from '../components/VerificationModal';
+import { UpdatesModal } from '../components/UpdatesModal';
 import { ReportTrackingModal } from '@/features/reports/components/ReportTrackingModal';
 import {
   getMyReports,
@@ -83,6 +85,9 @@ export function ProfileScreen() {
   const [showMyReportsPage, setShowMyReportsPage] = useState<boolean>(false);
   const [autoPlayOnWifi, setAutoPlayOnWifi] = useState<boolean>(true);
 
+  // حالة موديول فحص وتنزيل التحديثات
+  const [showUpdatesModal, setShowUpdatesModal] = useState<boolean>(false);
+
   useEffect(() => {
     getAutoPlayOnWifiSetting().then(setAutoPlayOnWifi);
   }, []);
@@ -101,6 +106,10 @@ export function ProfileScreen() {
       const onBackPress = () => {
         if (selectedReportForTracking) {
           setSelectedReportForTracking(null);
+          return true;
+        }
+        if (showUpdatesModal) {
+          setShowUpdatesModal(false);
           return true;
         }
         if (showFullImageModal) {
@@ -143,6 +152,7 @@ export function ProfileScreen() {
     }, [
       showMyReportsPage,
       selectedReportForTracking,
+      showUpdatesModal,
       showFullImageModal,
       showChangePhotoSheet,
       showChangePasswordSheet,
@@ -856,6 +866,27 @@ export function ProfileScreen() {
           />
         </View>
 
+        {/* زر تحديثات التطبيق بتصميم كرت تيليجرام أنيق */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.changePasswordCardBtn,
+            pressed && styles.changePasswordCardBtnPressed,
+          ]}
+          onPress={() => setShowUpdatesModal(true)}>
+          <View style={styles.changePasswordBtnRightCol}>
+            <View style={[styles.changePasswordIconSquare, { backgroundColor: '#EFF6FF' }]}>
+              <Ionicons name="cloud-download-outline" size={20} color="#2563EB" />
+            </View>
+            <View style={styles.changePasswordBtnTextCol}>
+              <Text style={styles.changePasswordBtnTitle}>تحديثات التطبيق</Text>
+              <Text style={styles.changePasswordBtnSub}>
+                فحص وتنزيل أحدث إصدار متوفر فورياً
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-back" size={19} color="#94A3B8" />
+        </Pressable>
+
         {/* زر تسجيل الخروج بتصميم تيليجرام نظيف تحت البصمة */}
         <Pressable
           style={({ pressed }) => [
@@ -1213,6 +1244,12 @@ export function ProfileScreen() {
         visible={showVerificationModal}
         onClose={() => setShowVerificationModal(false)}
         onSuccess={() => {}}
+      />
+
+      {/* ٧. موديول فحص وتنزيل التحديثات السحابية من الأسفل */}
+      <UpdatesModal
+        visible={showUpdatesModal}
+        onClose={() => setShowUpdatesModal(false)}
       />
 
       {/* موديولا متابعة خطوات ومراحل البلاغ بارتفاع تفاعلي سلس (١/٤ إلى ٣/٤) وبدون زر إكس */}
